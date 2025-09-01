@@ -1,0 +1,22 @@
+---
+title: "Untitled"
+author: "Karina Roitman"
+date: "2025-05-24"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+# Ejecutar TODOS los .R de la carpeta actual
+scripts <- list.files(pattern = "*.R")
+scripts <- scripts[scripts != "ejecutar_todo.R"]  # Excluir el script maestro
+sapply(scripts, source)
+
+# O de una carpeta específica
+scripts <- list.files("C:/Users/karin/Desktop/MCD/TESIS/", pattern = "*.R", full.names = TRUE)
+sapply(scripts, source)
+
+```

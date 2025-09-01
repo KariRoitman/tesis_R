@@ -1,0 +1,199 @@
+---
+title: "Kari_COVID"
+output: html_document
+date: "2024-08-16"
+---
+
+Objetivos
+=======================================================================
+
+1. Cargar librerias. 
+=======================================================================
+
+rmarkdown como estrategia sintáctica. (En bibliografia hay 2 archivos)
+
+```{r}
+library(rmarkdown)
+```
+
+```{r}
+
+library(stringr)
+?stringr
+library(tidyr)
+?tidyr
+library(dplyr)
+library(openxlsx)
+library(purrr)
+library(broom)
+library(ggplot2)
+```
+
+2. Cargar datos
+=======================================================================
+
+```{r}
+library(MALDIquant)
+?MALDIquant
+library(MALDIquantForeign)
+?MALDIquantForeign
+```
+
+```{r}
+load("/Volumes/TOSHIBA_EXT/Mac/trabajos_MALDI/Covid/Hospital.Clinicas/archivos.rda.espe.df/EspectrosHC/Average_HC.1.rda")
+```
+
+```{r , message=FALSE, echo=FALSE, warning=FALSE, out.width="100%"}
+
+Espec.Union.Clin.Pos.Neg <- c(
+                            Spectra.Train.INB.1.neg,
+                            Spectra.Train.INB.2.neg,
+                            Spectra.Train.INB.3.neg,
+                            Spectra.Test.INB.1.neg,
+                            Spectra.Test.INB.2.neg,
+                            Spectra.Test.INB.3.neg
+                            )
+
+Espectra.1 <- alignSpectra(Espec.Union.Clin.Pos.Neg, halfWindowSize=50, SNR=3, 
+                    tolerance=0.5, warpingMethod="quadratic", reference=Ref)
+
+### Ciego.5
+Categ.Ciego.5.covid<-Train.INB.1.neg[,c(1:3,5:7)]
+Categ.Ciego.5.covid<-Categ.Ciego.5.covid %>%
+  mutate(Procedencia=rep("Spectra.Model",nrow(Categ.Ciego.5.covid)))
+Categ.Ciego.5.covid<-data.frame(map(Categ.Ciego.5.covid, as.character),
+                                stringsAsFactors = FALSE)
+
+### Ciego.6
+Categ.Ciego.6.covid<-Train.INB.2.neg[,c(1:3,5:7)]
+Categ.Ciego.6.covid<-Categ.Ciego.6.covid %>%
+  mutate(Procedencia=rep("Spectra.Model",nrow(Categ.Ciego.6.covid)))
+Categ.Ciego.6.covid<-data.frame(map(Categ.Ciego.6.covid, as.character),
+                                stringsAsFactors = FALSE)
+
+### Ciego.7
+Categ.Ciego.7.covid<-Train.INB.3.neg[,c(1:3, 5:7)]
+Categ.Ciego.7.covid<-Categ.Ciego.7.covid %>%
+  mutate(Procedencia=rep("Spectra.Model",nrow(Categ.Ciego.7.covid)))
+Categ.Ciego.7.covid<-data.frame(map(Categ.Ciego.7.covid, as.character),
+                                stringsAsFactors = FALSE)
+
+### Ciego.8
+Categ.Ciego.8.covid<-Test.INB.1.neg[,c(1:3,5:7)]
+Categ.Ciego.8.covid<-Categ.Ciego.8.covid %>%
+  mutate(Procedencia=rep("Spectra.Model",nrow(Categ.Ciego.8.covid)))
+Categ.Ciego.8.covid<-data.frame(map(Categ.Ciego.8.covid, as.character),
+                                stringsAsFactors = FALSE)
+
+### Ciego.9
+Categ.Ciego.9.covid<-Test.INB.2.neg[,c(1:3,5:7)]
+Categ.Ciego.9.covid<-Categ.Ciego.9.covid %>%
+  mutate(Procedencia=rep("Spectra.Model",nrow(Categ.Ciego.9.covid)))
+Categ.Ciego.9.covid<-data.frame(map(Categ.Ciego.9.covid, as.character),
+                                stringsAsFactors = FALSE)
+
+### Ciego.10
+Categ.Ciego.10.covid<-Test.INB.3.neg[,c(1:3,5:7)]
+Categ.Ciego.10.covid<-Categ.Ciego.10.covid %>%
+  mutate(Procedencia=rep("Spectra.Model",nrow(Categ.Ciego.10.covid)))
+Categ.Ciego.10.covid<-data.frame(map(Categ.Ciego.10.covid, as.character),
+                                stringsAsFactors = FALSE)
+
+Base.Union.Clinc.Covid <- Categ.Ciego.5.covid %>%
+  bind_rows(Categ.Ciego.6.covid)%>%
+  bind_rows(Categ.Ciego.7.covid)%>%
+  bind_rows(Categ.Ciego.8.covid)%>%
+  bind_rows(Categ.Ciego.9.covid)%>%
+  bind_rows(Categ.Ciego.10.covid)
+
+Espectra.Orig <- data.frame(names(Espectra.1),
+                                  stringsAsFactors = FALSE)
+names(Espectra.Orig)<- c("spot.a.1")
+
+Datos_actualizados<-  Espectra.Orig %>%
+  left_join( Base.Union.Clinc.Covid, by="spot.a.1") %>%
+  mutate(ID=1:nrow(Espectra.Orig))
+
+```
+
+```{r , message=FALSE, echo=FALSE, warning=FALSE}
+
+peaks <- detectPeaks(Espectra.1, SNR = 3, 
+                     method="MAD", halfWindowSize=50)
+peaks <- binPeaks(peaks,tolerance=0.5)
+
+species.Ave<-factor(Datos_actualizados$Virus) 
+spot.factor.Avera<-factor(Datos_actualizados$spot.a.1) 
+
+peaks <- filterPeaks(peaks, minFrequency=c(rep(1/2,2)),
+                     labels = species.Ave,
+                     mergeWhitelists=TRUE)
+
+featureMatrix <- intensityMatrix(peaks, Espectra.1)
+```
+
+EDA. Graficos que muestren procedencia de muestras, cantidas, etc.
+
+3. Comprobar la existencia de efecto bacth por medio de PCA dentro y entre equipos. 
+=======================================================================
+
+Equipo (HdC+INBIRS es HdC, Malbrán y CR)
+
+Identificar efecto batch por medio de PCA y removerlo en caso de que existiera. 
+
+Agregar una columna a todos los data.frame que indique set de datos, puede ser el nombre del data.frame. Y otra columna Batch a las que numeras de 1 a n. 
+
+Compilar todos los dataframe con los datos en un unico dataframe (el naming de las columnas no fue 100% prolijo, ojo con el ncol de las variables). 
+
+```{r}
+library(sva)
+# Explorar funcion Combat
+```
+
+4. No supervisado: 
+=======================================================================
+
+probar UMAP y PCA-BDA con todos los datos y dentro de HC/CR/INBIRS
+
+```{r}
+library(binda)
+library("cluster")
+library("factoextra")
+library(umap)
+```
+
+5. Supervisado
+=======================================================================
+
+Explorar Ct data (regresión por Random Forest, separar datos en funcion de valores de Ct)
+
+Correr Rf y SVM con un tunning apropiado. Probar primero modelos selectivos para cada equipo (HdC+INBIRS es HdC, Malbrán y CR), luego intentar un modelo que combine todos los datos.
+
+```{r}
+library(tidymodels)
+library(caret)
+library(kernlab)
+library(randomForest)
+#library(caretEnsemble)
+```
+
+6. Compilar todos los resultados como flexdashbord
+=======================================================================
+
+```{r}
+
+library(flexdashboard)
+library(kableExtra)
+library(knitr)
+
+```
+
+7. Git-Hub
+=======================================================================
+
+
+
+
+
+
+

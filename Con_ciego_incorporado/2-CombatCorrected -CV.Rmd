@@ -1,0 +1,2579 @@
+---
+title: "COMBAT_CORRECTED"
+author: "Karina Roitman"
+date: "2024-12-22"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(MALDIquant)
+library(MALDIquantForeign)
+library(readBrukerFlexData)
+library(ggplot2)
+library(caret)
+library(stats)
+library(binda)
+library(factoextra)
+library(binda)
+library(dplyr)
+library(crossval)
+library(ggrepel)
+library(corrr)
+library(ggplot2)
+library(FactoMineR)
+```
+
+
+# Modelos (con datos combat_corrected POR EQUIPO pero sin dictomizar)
+
+
+
+```{r}
+combat_corrected_equipo_tot<- cbind(combat_corrected_equipo_tot, label=Datos_actualizados$PCR.Cov)#1=neg,2=pos
+```
+
+```{r}
+combat_corrected_equipo_tot<-as.data.frame(combat_corrected_equipo_tot)
+combat_corrected_equipo_tot$label<-as.factor(combat_corrected_equipo_tot$label)
+str(combat_corrected_equipo_tot)
+```
+
+
+
+```{r}
+library(dplyr)
+combat_corrected_equipo_tot <- combat_corrected_equipo_tot %>% rename(Y = label)
+str(combat_corrected_equipo_tot$Y)
+```
+
+```{r}
+combat_corrected_equipo_nodic_tot<-combat_corrected_equipo_tot[1:542,]
+
+ciego_combat_corrected_equipo_tot<-combat_corrected_equipo_tot[543:694,]
+```
+
+
+
+```{r}
+
+library(tidymodels)
+# set.seed asegura reproducibilidad
+set.seed(42)
+
+#Utilizo tidymodels para dividir de manera proporcional
+
+split_data <- initial_split(combat_corrected_equipo_nodic_tot, strata = "Y", prop = 0.8)
+
+# Obtener los conjuntos de entrenamiento y prueba
+trainData_equipo <- training(split_data)
+testData_equipo <- testing(split_data)
+
+# Ver la distribución de clases en ambos conjuntos
+table(trainData_equipo$Y)
+table(testData_equipo$Y)
+
+
+```
+
+
+```{r}
+# Especificar la variable dependiente en la fórmula
+formula <- Y ~ .
+```
+
+
+
+```{r}
+# Submuestras y repeticiones
+set.seed(42)
+
+particiones <- 3
+repeticiones <- 5
+```
+
+```{r}
+# Specify the tunning configuration (mtry hyperparameter depends on the number of columns)
+seed.rf <- 42
+set.seed(seed.rf) 
+
+
+mtry <- c(1, 2, 3)
+min.node.size <- seq(1, 10, 2)  # Reducir el rango
+hiperparametros <- expand.grid(mtry =  mtry)
+
+
+seeds <- vector(mode = "list", length = (particiones * repeticiones) + 1)
+
+for (i in 1:(particiones * repeticiones)) {
+  seeds[[i]] <- sample.int(500, nrow(hiperparametros)) 
+}
+# genera un vector de nrow(hiperparametros) números aleatorios entre 1 y 500.
+#Esto asegura que cada combinación de hiperparámetros tenga una semilla diferente en cada iteración.
+
+seeds[[(particiones * repeticiones) + 1]] <- sample.int(500, 1)
+
+# Training control
+```
+
+
+
+```{r}
+# Training control
+
+cross_val_rf <- trainControl(
+  method = "repeatedcv",
+  number = particiones,
+  repeats = repeticiones,
+  returnResamp = "final",
+  verboseIter = FALSE,
+  allowParallel = TRUE,
+  classProbs = TRUE,
+  seeds = seeds)
+
+# Training 
+
+
+trainData_equipo$Y <- factor(as.numeric(factor(trainData_equipo$Y)))
+trainData_equipo$Y <- factor(trainData_equipo$Y, levels = c("1", "2"))
+levels(trainData_equipo$Y) <- make.names(levels(trainData_equipo$Y))
+
+```
+
+# Random forest
+
+
+```{r}
+
+library(caret)
+
+# 
+# RF_equipo <- caret::train(Y ~ ., data = trainData_equipo, 
+#                       method = "rf",   # Método para random forest
+#                       #trControl = control1, 
+#                       tuneGrid = hiperparametros,  # Parámetro mtry
+#                       metric = "Accuracy",
+#                       trControl = cross_val)  # Métrica para clasificación
+# 
+# 
+# 
+
+
+RF_equipo_fx <- function(df_train, model, grid, metrica = "Accuracy", title = "modelo", control) {
+
+  
+  # Entrenar el modelo
+  RF_equipo <- caret::train(
+    Y ~ .,
+    data = df_train,
+    method = model,
+    tuneGrid = hiperparametros,
+    metric = metrica,
+    trControl = cross_val_rf
+  )
+  
+  # Mostrar resumen
+  print(RF_equipo)
+  plot(RF_equipo, main = title)
+  
+  # Guardar resultado
+  #save(RF_equipo, file = paste0(title, ".rda"))
+  
+  return(RF_equipo)
+}
+
+RF_equipo<-RF_equipo_fx(df_train=trainData_equipo, model="rf", grid=tuneGrid, metrica="Accuracy", title = "Primera_funcion" )
+print(RF_equipo)
+
+#save(RF_equipo, file = paste(title, ".rda"))
+
+
+```
+
+
+```{r}
+plot(RF_equipo)
+```
+
+
+
+
+#gbm
+
+```{r}
+# grid_gbm <- expand.grid(
+#   interaction.depth = c(1, 3, 5, 7, 9, 11), 
+#   n.trees = (1:10) * 100, 
+#   shrinkage = c(0.01, 0.05, 0.1, 0.2),
+#   n.minobsinnode = c(5, 10, 15, 20, 25)
+# )
+
+# 
+# GBM_model<-train(Y ~ ., data = trainData, 
+#                       method = "gbm",   # Método para random forest
+#                       trControl = control1, 
+#                       tuneGrid = grid_gbm, 
+#                       metric = "Accuracy")
+
+
+# GBM_model <- train(
+#   Y ~ .,                        # Reemplaza Y con tu variable dependiente
+#   data = trainData,            # Tu conjunto de entrenamiento
+#   method = "gbm",              # Método GBM
+#   trControl = control1,         # Control de entrenamiento
+#   tuneGrid = expand.grid(
+#     interaction.depth = 3,     # Profundidad máxima de los árboles
+#     n.trees = 100,             # Número de árboles
+#     shrinkage = 0.1,           # Tasa de aprendizaje
+#     n.minobsinnode = 10        # Mínimo de observaciones en cada nodo
+#   ),
+#   metric = "Accuracy",         # Métrica de rendimiento
+#   verbose = TRUE               # Mostrar progreso
+# )
+# GBM_model
+
+```
+
+```{r}
+# trellis.par.set(caretTheme())
+# plot(GBM_model)
+# 
+# trellis.par.set(caretTheme())
+# plot(GBM_model, metric = "Kappa")
+```
+
+# SVM
+
+```{r}
+# SVM_cc <- train(Y ~., data = trainData, method = "svmRadial", trControl = control1, preProcess = c("center","scale"), tuneLength = 10, prob.model = TRUE)
+# # Print the best tuning parameter sigma and C that maximizes model accuracy
+# SVM_cc$bestTun    # por default es accuracy porque en trainControl no aclaré nada
+# 
+# #there is a tuning parameter C, also known as Cost, that determines the possible misclassifications. It essentially imposes a penalty to the model for making an error: the higher the value of C, the less likely it is that the SVM algorithm will misclassify a point.
+# #sigma: es propio del tipo de kernel que estamos utilizando y en el fondo va a regular el overfitting del modelo
+# 
+# SVM_cc
+# #grid search SVM
+# 
+# # tune_grid <- expand.grid(
+# #   C = 2^(-5:5),      # Rango de valores de C: 0.03125, 0.0625, ..., 32
+# #   sigma = c(0.01, 0.1, 0.5, 1)  # Rango de valores de sigma
+# # )
+# # 
+# # # Ajustar el modelo SVM con tuning de hiperparámetros
+# # SVM_model <- train(
+# #   Y ~ ., 
+# #   data = trainData, 
+# #   method = "svmRadial", 
+# #   trControl = control1, 
+# #   preProcess = c("center", "scale"), 
+# #   tuneGrid = tune_grid,  # Usar el grid de hiperparámetros
+# #   metric = "Accuracy"     # Métrica para evaluación
+# # )
+```
+
+
+
+
+```{r}
+#plot(SVM_cc)
+```
+
+
+KNN
+
+
+```{r}
+tuneGrid <- expand.grid(k = 1:15)
+# Seeds
+seed.rf <- 42
+set.seed(seed.rf)
+
+seeds <- vector(mode = "list", length = (particiones * repeticiones) + 1)
+
+for (i in 1:(particiones * repeticiones)) {
+  seeds[[i]] <- sample.int(500, nrow(tuneGrid)) 
+}
+
+seeds[[(particiones * repeticiones) + 1]] <- sample.int(500, 1)
+
+# Training control
+```
+
+
+
+```{r}
+# Training control
+
+cross_val_knn <- trainControl(
+  method = "repeatedcv",
+  number = particiones,
+  repeats = repeticiones,
+  returnResamp = "final",
+  verboseIter = FALSE,
+  allowParallel = TRUE,
+  classProbs = TRUE,
+  seeds = seeds)
+```
+
+
+```{r}
+
+# 
+# KNN_equipo <- caret::train(formula, 
+#                     data = trainData_equipo, 
+#                     trControl = cross_val, 
+#                     method = "knn", 
+#                     metric = "Accuracy", 
+#                     preProcess = c("center","scale"),
+#                     tuneGrid = tuneGrid)
+# 
+# KNN_equipo
+
+
+
+KNN_equipo_fx <- function(df_train, model, grid, metrica = "Accuracy", title = "modelo", control, preProcess) {
+
+  
+  # Entrenar el modelo
+  KNN_equipo <- caret::train(
+    Y ~ .,
+    data = df_train,
+    method = model,
+    tuneGrid = grid,
+    metric = metrica,
+    trControl = cross_val_knn,
+    preProcess = preProcess
+  )
+  
+  # Mostrar resumen
+  print(KNN_equipo)
+  plot(KNN_equipo, main = title)
+  
+  # Guardar resultado
+  save(KNN_equipo, file = paste0(title, ".rda"))
+  
+  return(KNN_equipo)
+}
+
+KNN_equipo<-KNN_equipo_fx(df_train=trainData_equipo, model="knn", grid=tuneGrid, metrica="Accuracy", title = "KNN_EQUIPO", preProcess = c("center","scale") )
+print(KNN_equipo)
+
+
+
+
+```
+
+```{r}
+plot(KNN_equipo)
+```
+
+# GLMNET
+
+```{r}
+
+tuneGrid <- expand.grid(
+  alpha = seq(0, 1, by = 0.1),  # From 0 (Ridge) to 1 (Lasso)
+  lambda = 10^seq(-3, 3, length = 100)  # Logarithmic scale for lambda
+)
+# Seeds
+seed.rf <- 42
+set.seed(seed.rf)
+
+max_sample <- max(500, nrow(tuneGrid) * 2)
+seeds <- vector(mode = "list", length = (particiones * repeticiones) + 1)
+
+for (i in 1:(particiones * repeticiones)) {
+  seeds[[i]] <- sample.int(max_sample, nrow(tuneGrid)) 
+}
+
+seeds[[(particiones * repeticiones) + 1]] <- sample.int(500, 1)
+
+# Training control
+```
+
+
+```{r}
+# Training control
+
+cross_val_glm <- trainControl(
+  method = "repeatedcv",
+  number = particiones,
+  repeats = repeticiones,
+  returnResamp = "final",
+  verboseIter = FALSE,
+  allowParallel = TRUE,
+  classProbs = TRUE,
+  seeds = seeds)
+```
+
+
+```{r}
+GLM_equipo_fx <- function(df_train, model, grid, metrica = "Accuracy", title = "modelo", control) {
+
+  
+  # Entrenar el modelo
+  GLM_equipo <- caret::train(
+    Y ~ .,
+    data = df_train,
+    method = model,
+    tuneGrid = grid,
+    metric = metrica,
+    trControl = cross_val_glm
+  )
+  
+  # Mostrar resumen
+  print(GLM_equipo)
+  plot(GLM_equipo, main = title)
+  
+  # Guardar resultado
+  save(GLM_equipo, file = paste0(title, ".rda"))
+  
+  return(GLM_equipo)
+}
+
+GLM_equipo<-GLM_equipo_fx(df_train=trainData_equipo, model="glmnet", grid=tuneGrid, metrica="Accuracy", title = "Primera_funcion" )
+print(GLM_equipo)
+
+#save(GLM_equipo, file = paste(title, ".rda"))
+
+
+```
+
+```{r}
+# Imprimir los mejores hiperparámetros
+best_params <- GLM_equipo$bestTune
+print("Best Hyperparameters:")
+print(best_params)
+
+# Extraer accuracy y kappa del mejor modelo
+# Buscamos la fila que corresponde a los mejores hiperparámetros en el data frame model$results
+best_model_index <- apply(GLM_equipo$results, 1, function(row) {
+  all(row[1:length(best_params)] == as.numeric(best_params))
+})
+
+best_model_results <- GLM_equipo$results[best_model_index, ]
+
+
+
+# Imprimir accuracy y kappa del mejor modelo
+accuracy <- best_model_results$Accuracy
+kappa <- best_model_results$Kappa
+
+print("Accuracy of the Best Model:")
+print(accuracy)
+
+print("Kappa of the Best Model:")
+print(kappa)
+
+```
+
+
+
+----------------------------------------
+
+
+#  Prediccion
+```{r}
+testData_equipo$Y<-as.factor(testData_equipo$Y)
+str(testData_equipo$Y)
+```
+
+```{r}
+testData_NOID_equipo <- testData_equipo[, -which(names(testData_equipo) == "Y")]
+
+```
+
+# RF
+
+```{r}
+#prediccionesRF1<-predict(resultadosRF, newdata = dataNOID_test)
+predRF_equipo<-predict(RF_equipo, newdata = testData_NOID_equipo)#matriz binarizada
+print(predRF_equipo)
+predRF_equipo <- factor(as.character(predRF_equipo), 
+                             levels = c("X1", "X2"),
+                             labels = c("1", "2"))
+predRF_equipo <- factor(predRF_equipo, levels = c("1", "2"), labels = c("Cov.Neg", "Cov.Pos"))
+y_test <- testData_equipo$Y
+#y_test <- factor(y_test, levels = c("1", "2"), labels = c("Cov.Neg", "Cov.Pos"))
+
+# Obtener las etiquetas reales del conjunto de datos de prueba
+
+#y_testDIC <- FeatureMatrix_Dic_df$Y#Matriz binarizada
+
+```
+
+```{r}
+#
+prob_predRF_equipo <- predict(RF_equipo, newdata = testData_NOID_equipo, type = "prob")
+# Carga los paquetes necesarios
+library(caret)
+library(pROC)
+
+# Crea la matriz de confusión usando caret
+RF_metrics_equipo <- caret::confusionMatrix(predRF_equipo, y_test, positive = "Cov.Pos")
+
+
+y_test_numeric <- as.numeric(y_test)
+
+roc_curve <- roc(response = y_test_numeric, 
+                 predictor = prob_predRF_equipo[, "X2"], 
+                 levels = c(1, 2))
+
+
+auc_value_RF_equipo <- auc(roc_curve)
+print(paste("El valor de AUC es:", round(auc_value_RF_equipo, 3)))
+
+# Visualiza la curva ROC
+plot(roc_curve, main = "Curva ROC", col = "blue", lwd = 2)
+
+
+# Accede a los componentes overall y byClass
+# Métricas generales
+accuracy_RF_equipo <- RF_metrics_equipo$overall["Accuracy"]
+kappa_RF_equipo <- RF_metrics_equipo$overall["Kappa"]
+
+# Métricas por clase
+sensitivity_RF_equipo <- RF_metrics_equipo$byClass["Sensitivity"]
+specificity_RF_equipo <- RF_metrics_equipo$byClass["Specificity"]
+precision_RF_equipo <- RF_metrics_equipo$byClass["Pos Pred Value"]
+recall_RF_equipo <- RF_metrics_equipo$byClass["Sensitivity"]  # Igual a sensitivity
+f1_score_RF_equipo <- RF_metrics_equipo$byClass["F1"]
+npv_RF_equipo <- RF_metrics_equipo$byClass["Neg Pred Value"]
+prevalence_RF_equipo <- RF_metrics_equipo$byClass["Prevalence"]
+detection_rate_RF_equipo <- RF_metrics_equipo$byClass["Detection Rate"]
+balanced_accuracy_RF_equipo <- RF_metrics_equipo$byClass["Balanced Accuracy"]
+
+# Calcular LR+ y LR- que no vienen directamente en confusionMatrix
+LR_plus_RF_equipo <- sensitivity_RF_equipo / (1 - specificity_RF_equipo)
+LR_minus_RF_equipo <- (1 - sensitivity_RF_equipo) / specificity_RF_equipo
+
+# Para manejar valores especiales
+LR_plus_RF_equipo <- ifelse(is.nan(LR_plus_RF_equipo) | is.infinite(LR_plus_RF_equipo), NA, LR_plus_RF_equipo)
+LR_minus_RF_equipo <- ifelse(is.nan(LR_minus_RF_equipo) | is.infinite(LR_minus_RF_equipo), NA, LR_minus_RF_equipo)
+
+
+# Crear un dataframe con todas las métricas
+metrics_rf_equipo <- data.frame(
+  Metric = c("Accuracy", "Kappa", "Sensitivity", "Specificity", "Precision", 
+             "F1_Score", "NPV", "Prevalence", "Detection_Rate", 
+             "Balanced_Accuracy", "LR+", "LR-", "AUC"),
+  rf_equipo_tot = c(accuracy_RF_equipo, kappa_RF_equipo, sensitivity_RF_equipo, specificity_RF_equipo, precision_RF_equipo, f1_score_RF_equipo, npv_RF_equipo, prevalence_RF_equipo, detection_rate_RF_equipo, 
+            balanced_accuracy_RF_equipo, LR_plus_RF_equipo, LR_minus_RF_equipo, auc_value_RF_equipo)
+)
+
+# Mostrar los resultados
+print(metrics_rf_equipo)
+
+
+```
+
+
+```{r}
+ciego_data <- as.data.frame(ciego_combat_corrected_equipo_tot)
+
+# Si viene con columna Y (conocida), separala:
+if ("Y" %in% colnames(ciego_data)) {
+  Y_ciego <- ciego_data$Y
+  X_ciego <- ciego_data[, setdiff(colnames(ciego_data), "Y")]
+} else {
+  X_ciego <- ciego_data
+  Y_ciego <- NULL
+}
+
+```
+
+
+```{r}
+# Predicciones (clase)
+predicciones_ciego_equipo_tot <- predict(RF_equipo, newdata = X_ciego)
+levels(predicciones_ciego_equipo_tot) <- c("Cov.Neg", "Cov.Pos")
+
+# Predicciones (probabilidades)
+prob_ciego <- predict(RF_equipo, newdata = X_ciego, type = "prob")
+#prob_ciego$Cov.Neg<-prob_ciego$X1
+#prob_ciego$Cov.Pos<-prob_ciego$X2
+
+
+  # Confusion matrix
+  ciego_rf_tot_equipo<-caret::confusionMatrix(predicciones_ciego_equipo_tot, Y_ciego, positive = "Cov.Pos")
+
+  # AUC
+  library(pROC)
+  Y_ciego_num <- as.numeric(Y_ciego)
+  roc_ciego <- roc(Y_ciego_num, prob_ciego[, "X2"])
+  plot(roc_ciego, main = "ROC en Datos Ciegos", col = "darkgreen", lwd = 2)
+  auc_value_RF_equipo_ciego<-auc(roc_ciego)
+  
+  
+  
+accuracy_RF_equipo_ciego <- ciego_rf_tot_equipo$overall["Accuracy"]
+kappa_RF_equipo_ciego <- ciego_rf_tot_equipo$overall["Kappa"]
+
+# Métricas por clase
+sensitivity_RF_equipo_ciego <- ciego_rf_tot_equipo$byClass["Sensitivity"]
+specificity_RF_equipo_ciego <- ciego_rf_tot_equipo$byClass["Specificity"]
+precision_RF_equipo_ciego <- ciego_rf_tot_equipo$byClass["Pos Pred Value"]
+recall_RF_equipo_ciego <- ciego_rf_tot_equipo$byClass["Sensitivity"]  # Igual a sensitivity
+f1_score_RF_equipo_ciego <- ciego_rf_tot_equipo$byClass["F1"]
+npv_RF_equipo_ciego <- ciego_rf_tot_equipo$byClass["Neg Pred Value"]
+prevalence_RF_equipo_ciego <- ciego_rf_tot_equipo$byClass["Prevalence"]
+detection_rate_RF_equipo_ciego <- ciego_rf_tot_equipo$byClass["Detection Rate"]
+balanced_accuracy_RF_equipo_ciego <- ciego_rf_tot_equipo$byClass["Balanced Accuracy"]
+
+# Calcular LR+ y LR- que no vienen directamente en confusionMatrix
+LR_plus_RF_equipo_ciego <- sensitivity_RF_equipo_ciego / (1 - specificity_RF_equipo_ciego)
+LR_minus_RF_equipo_ciego <- (1 - sensitivity_RF_equipo_ciego) / specificity_RF_equipo_ciego
+
+# Para manejar valores especiales
+LR_plus_RF_equipo_ciego <- ifelse(is.nan(LR_plus_RF_equipo_ciego) | is.infinite(LR_plus_RF_equipo_ciego), NA, LR_plus_RF_equipo_ciego)
+LR_minus_RF_equipo_ciego <- ifelse(is.nan(LR_minus_RF_equipo_ciego) | is.infinite(LR_minus_RF_equipo_ciego), NA, LR_minus_RF_equipo_ciego)
+
+
+# Crear un dataframe con todas las métricas
+metrics_rf_equipo_ciego <- data.frame(
+  Metric = c("Accuracy", "Kappa", "Sensitivity", "Specificity", "Precision", 
+             "F1_Score", "NPV", "Prevalence", "Detection_Rate", 
+             "Balanced_Accuracy", "LR+", "LR-", "AUC"),
+  rf_equipo_tot = c(accuracy_RF_equipo_ciego, kappa_RF_equipo_ciego, sensitivity_RF_equipo_ciego, specificity_RF_equipo_ciego, precision_RF_equipo_ciego, f1_score_RF_equipo_ciego, npv_RF_equipo_ciego, prevalence_RF_equipo_ciego, detection_rate_RF_equipo_ciego, 
+            balanced_accuracy_RF_equipo_ciego, LR_plus_RF_equipo_ciego, LR_minus_RF_equipo_ciego, auc_value_RF_equipo_ciego)
+)
+
+# Mostrar los resultados
+print(metrics_rf_equipo_ciego)
+```
+
+
+
+
+#Prediccion GBM
+
+```{r}
+# #prediccionesRF1<-predict(resultadosRF, newdata = dataNOID_test)
+# prediccionesGBM<-predict(GBM_model, newdata = testData_NOID)#matriz binarizada
+# print(prediccionesGBM)
+# 
+# 
+# # Obtener las etiquetas reales del conjunto de datos de prueba
+# y_test <- testData$Y
+# #y_testDIC <- FeatureMatrix_Dic_df$Y#Matriz binarizada
+# 
+# ```
+# 
+# ```{r}
+# confusion_matrixGBM <- table(prediccionesGBM, y_test)
+# # Imprimir la matriz de confusión
+# print(confusion_matrixGBM)
+# 
+# ```
+# 
+# 
+# ```{r}
+# # Precisión (Accuracy)
+# accuracy_GBM <- sum(diag(confusion_matrixGBM)) / sum(confusion_matrixGBM)
+# print(paste("La precisión (Accuracy) es:", round(accuracy_GBM,2)))
+# 
+# # Sensibilidad (Recall o TPR)
+# sensitivity_GBM <- confusion_matrixGBM[2, 2] / sum(confusion_matrixGBM[, 2])
+# print(paste("La sensibilidad es:", round(sensitivity_GBM,2)))
+# 
+# # Especificidad (TNR)
+# specificity_GBM <- confusion_matrixGBM[1, 1] / sum(confusion_matrixGBM[, 1])
+# print(paste("la especificidad es:", round(specificity_GBM,2)))
+# 
+# # Valor Predictivo Positivo (PPV o Precision)
+# ppv_GBM <- confusion_matrixGBM[2, 2] / sum(confusion_matrixGBM[2, ])
+# print(paste("el VPP es:", round(ppv_GBM,2)))
+# 
+# # Valor Predictivo Negativo (VPN)
+# npv_GBM <- confusion_matrixGBM[1, 1] / sum(confusion_matrixGBM[1, ])
+# print(paste("el VPN es: ",  round(npv_GBM,2)))
+
+```
+
+# Prediccion SVM
+
+```{r}
+# #prediccionesRF1<-predict(resultadosRF, newdata = dataNOID_test)
+# predSVMCC<-predict(SVM_cc, newdata = testData_NOID)#matriz binarizada
+# print(predSVMCC)
+# 
+# 
+# # Obtener las etiquetas reales del conjunto de datos de prueba
+# y_test <- testData$Y
+# #y_testDIC <- FeatureMatrix_Dic_df$Y#Matriz binarizada
+
+```
+
+```{r}
+# confusion_matrixSVM <- table(predSVMCC, y_test)
+# # Imprimir la matriz de confusión
+# print(confusion_matrixSVM)
+
+```
+
+
+# Prediccion KNN
+
+```{r}
+#prediccionesRF1<-predict(resultadosRF, newdata = dataNOID_test)
+predKNN_equipo<-predict(KNN_equipo, newdata = testData_NOID_equipo)#matriz binarizada
+print(predKNN_equipo)
+predKNN_equipo <- factor(as.character(predKNN_equipo), 
+                             levels = c("X1", "X2"),
+                             labels = c("1", "2"))
+predKNN_equipo <- factor(predKNN_equipo, levels = c("1", "2"), labels = c("Cov.Neg", "Cov.Pos"))
+# Obtener las etiquetas reales del conjunto de datos de prueba
+y_test <- testData_equipo$Y
+#y_testDIC <- FeatureMatrix_Dic_df$Y#Matriz binarizada
+
+```
+
+
+```{r}
+# Asegúrate de que tus factores están correctamente definidos
+# predKNN_equipo <- factor(predKNN_equipo, levels = c("1", "2"), labels = c("Cov.Neg", "Cov.Pos"))
+# y_test <- factor(y_test, levels = c("1", "2"), labels = c("Cov.Neg", "Cov.Pos"))
+
+# Carga los paquetes necesarios
+library(caret)
+library(pROC)
+
+# Crea la matriz de confusión usando caret
+KNN_metrics_equipo <- caret::confusionMatrix(predKNN_equipo, y_test, positive = "Cov.Pos")
+
+prob_predRKNN_equipo <- predict(KNN_equipo, newdata = testData_NOID_equipo, type = "prob")
+# Carga los paquetes necesarios
+library(caret)
+library(pROC)
+y_test_numeric <- as.numeric(y_test)
+
+roc_curve <- roc(response = y_test_numeric, 
+                 predictor = prob_predRKNN_equipo[, "X2"], 
+                 levels = c(1, 2))
+
+
+auc_value_knn_equipo <- auc(roc_curve)
+print(paste("El valor de AUC es:", round(auc_value_knn_equipo, 3)))
+
+# Visualiza la curva ROC
+plot(roc_curve, main = "Curva ROC", col = "blue", lwd = 2)
+
+
+
+# Accede a los componentes overall y byClass
+# Métricas generales
+accuracy_KNN_equipo <- KNN_metrics_equipo$overall["Accuracy"]
+kappa_KNN_equipo <- KNN_metrics_equipo$overall["Kappa"]
+
+# Métricas por clase
+sensitivity_KNN_equipo <- KNN_metrics_equipo$byClass["Sensitivity"]
+specificity_KNN_equipo <- KNN_metrics_equipo$byClass["Specificity"]
+precision_KNN_equipo <- KNN_metrics_equipo$byClass["Pos Pred Value"]
+recall_KNN_equipo <- KNN_metrics_equipo$byClass["Sensitivity"]  # Igual a sensitivity
+f1_score_KNN_equipo <- KNN_metrics_equipo$byClass["F1"]
+npv_KNN_equipo <- KNN_metrics_equipo$byClass["Neg Pred Value"]
+prevalence_KNN_equipo <- KNN_metrics_equipo$byClass["Prevalence"]
+detection_rate_KNN_equipo <- KNN_metrics_equipo$byClass["Detection Rate"]
+balanced_accuracy_KNN_equipo <- KNN_metrics_equipo$byClass["Balanced Accuracy"]
+
+# Calcular LR+ y LR- que no vienen directamente en confusionMatrix
+LR_plus_KNN_equipo <- sensitivity_KNN_equipo / (1 - specificity_KNN_equipo)
+LR_minus_KNN_equipo <- (1 - sensitivity_KNN_equipo) / specificity_KNN_equipo
+
+# Para manejar valores especiales
+LR_plus_KNN_equipo <- ifelse(is.nan(LR_plus_KNN_equipo) | is.infinite(LR_plus_KNN_equipo), NA, LR_plus_KNN_equipo)
+LR_minus_KNN_equipo <- ifelse(is.nan(LR_minus_KNN_equipo) | is.infinite(LR_minus_KNN_equipo), NA, LR_minus_KNN_equipo)
+
+
+
+
+# pred_numeric_KNN <- as.numeric(predKNN_equipo == "Cov.Pos")
+# test_numeric_KNN <- as.numeric(y_test == "Cov.Pos")
+# roc_obj_KNN <- roc(test_numeric_KNN, pred_numeric_KNN)
+# auc_value_KNN_equipo <- auc(roc_obj_KNN)
+# opt_coords <- coords(roc_obj_KNN, "best", ret = c("sensitivity", "specificity"))
+
+# Crear un dataframe con todas las métricas
+metrics_KNN_equipo <- data.frame(
+  Metric = c("Accuracy", "Kappa", "Sensitivity", "Specificity", "Precision", 
+             "F1_Score", "NPV", "Prevalence", "Detection_Rate", 
+             "Balanced_Accuracy", "LR+", "LR-", "AUC"),
+  KNN_equipo_tot = c(accuracy_KNN_equipo, kappa_KNN_equipo, sensitivity_KNN_equipo, specificity_KNN_equipo, precision_KNN_equipo, 
+            f1_score_KNN_equipo, npv_KNN_equipo, prevalence_KNN_equipo, detection_rate_KNN_equipo, 
+            balanced_accuracy_KNN_equipo, LR_plus_KNN_equipo, LR_minus_KNN_equipo, auc_value_knn_equipo)
+)
+
+# Mostrar los resultados
+print(metrics_KNN_equipo)
+```
+
+
+
+```{r}
+
+# library(irr)
+# 
+# # Calcular Kappa
+# kappa_KNNeq <- kappa2(cbind(predKNN_equipo, testData_equipo$Y))
+# 
+# # Ver el valor de Kappa
+# print(paste("El índice Kappa es:", round(kappa_KNNeq$value, 3)))
+# kappa_KNNeq<-round(kappa_KNNeq$value, 3)
+```
+
+
+# Prediccion GLM
+
+```{r}
+#prediccionesRF1<-predict(resultadosRF, newdata = dataNOID_test)
+predGLM_equipo<-predict(GLM_equipo, newdata = testData_NOID_equipo)#matriz binarizada
+print(predGLM_equipo)
+y_test <- testData_equipo$Y
+predGLM_equipo <- factor(predGLM_equipo, levels = c("X1", "X2"), labels = c("Cov.Neg", "Cov.Pos"))
+#y_test <- factor(y_test, levels = c("1", "2"), labels = c("Cov.Neg", "Cov.Pos"))
+
+
+# Obtener las etiquetas reales del conjunto de datos de prueba
+
+#y_testDIC <- FeatureMatrix_Dic_df$Y#Matriz binarizada
+
+```
+
+```{r}
+GLM_metrics_equipo <- caret::confusionMatrix(predGLM_equipo, y_test, positive = "Cov.Pos")
+```
+
+
+
+
+
+```{r}
+# # Precisión (Accuracy)
+# accuracy_GLM_equipo <- sum(diag(confusion_matrixGLM)) / sum(confusion_matrixGLM)
+# print(paste("La precisión (Accuracy) es:", round(accuracy_GLM_equipo,2)))
+# 
+# # Sensibilidad (Recall o TPR)
+# sensitivity_GLM_equipo <- confusion_matrixGLM[2, 2] / sum(confusion_matrixGLM[, 2])
+# print(paste("La sensibilidad es:", round(sensitivity_GLM_equipo,2)))
+# 
+# # Especificidad (TNR)
+# specificity_GLM_equipo <- confusion_matrixGLM[1, 1] / sum(confusion_matrixGLM[, 1])
+# print(paste("la especificidad es:", round(specificity_GLM_equipo,2)))
+# 
+# # Valor Predictivo Positivo (PPV o Precision)
+# ppv_GLM_equipo <- confusion_matrixGLM[2, 2] / sum(confusion_matrixGLM[2, ])
+# print(paste("el VPP es:", round(ppv_GLM_equipo,2)))
+# 
+# # Valor Predictivo Negativo (VPN)
+# npv_GLM_equipo <- confusion_matrixGLM[1, 1] / sum(confusion_matrixGLM[1, ])
+# print(paste("el VPN es: ",  round(npv_GLM_equipo,2)))
+# 
+# 
+# 
+
+# Predicciones probabilísticas con el modelo GLM
+prob_predGLM_equipo <- predict(GLM_equipo, newdata = testData_NOID_equipo, type = "prob")
+
+# Verifica los nombres de las columnas (clases)
+print(colnames(prob_predGLM_equipo))  # Deberían ser "1" y "2" o los nombres de las clases
+
+# Asegúrate de que y_test sea numérico con niveles 1 y 2
+y_test_numeric <- as.numeric(testData_equipo$Y)
+
+# Calcula la curva ROC usando la probabilidad de la clase positiva ("2")
+roc_curve_glm <- roc(response = y_test_numeric, predictor = prob_predGLM_equipo[, "X2"], levels = c(1, 2))
+
+# Calcula el AUC
+AUC_GLM_equipo <- auc(roc_curve_glm)
+print(paste("El valor de AUC es:", round(AUC_GLM_equipo, 3)))
+
+# Visualiza la curva ROC
+plot(roc_curve_glm, main = "Curva ROC - GLM", col = "red", lwd = 2)
+```
+```{r}
+accuracyGLM_equipo <- GLM_metrics_equipo$overall["Accuracy"]
+kappaGLM_equipo <- GLM_metrics_equipo$overall["Kappa"]
+
+# Métricas por clase
+sensitivityGLM_equipo <- GLM_metrics_equipo$byClass["Sensitivity"]
+specificityGLM_equipo <- GLM_metrics_equipo$byClass["Specificity"]
+precisionGLM_equipo <- GLM_metrics_equipo$byClass["Pos Pred Value"]
+recallGLM_equipo <- GLM_metrics_equipo$byClass["Sensitivity"]  # Igual a sensitivity
+f1_scoreGLM_equipo <- GLM_metrics_equipo$byClass["F1"]
+npvGLM_equipo <- GLM_metrics_equipo$byClass["Neg Pred Value"]
+prevalenceGLM_equipo <- GLM_metrics_equipo$byClass["Prevalence"]
+detection_rateGLM_equipo <- GLM_metrics_equipo$byClass["Detection Rate"]
+balanced_accuracyGLM_equipo <- GLM_metrics_equipo$byClass["Balanced Accuracy"]
+
+# Calcular LR+ y LR- que no vienen directamente en confusionMatrix
+LR_plusGLM_equipo <- sensitivityGLM_equipo / (1 - specificityGLM_equipo)
+LR_minusGLM_equipo <- (1 - sensitivityGLM_equipo) / specificityGLM_equipo
+
+# Para manejar valores especiales
+LR_plusGLM_equipo <- ifelse(is.nan(LR_plusGLM_equipo) | is.infinite(LR_plusGLM_equipo), NA, LR_plusGLM_equipo)
+LR_minusGLM_equipo <- ifelse(is.nan(LR_minusGLM_equipo) | is.infinite(LR_minusGLM_equipo), NA, LR_minusGLM_equipo)
+
+```
+
+```{r}
+metrics_glm_equipo <- data.frame(
+  Metric = c("Accuracy", "Kappa", "Sensitivity", "Specificity", "Precision", 
+             "F1_Score", "NPV", "Prevalence", "Detection_Rate", 
+             "Balanced_Accuracy", "LR+", "LR-", "AUC"),
+  glm_equipo_tot = c(accuracyGLM_equipo, kappaGLM_equipo, sensitivityGLM_equipo, specificityGLM_equipo, precisionGLM_equipo, 
+            f1_scoreGLM_equipo, npvGLM_equipo, prevalenceGLM_equipo, detection_rateGLM_equipo, 
+            balanced_accuracyGLM_equipo, LR_plusGLM_equipo, LR_minusGLM_equipo, AUC_GLM_equipo)
+)
+
+print(metrics_glm_equipo)
+```
+
+
+```{r}
+
+# library(irr)
+# 
+# # Calcular Kappa
+# kappa_GLM_equipo <- kappa2(cbind(predGLM_equipo, testData_equipo$Y))
+# 
+# # Ver el valor de Kappa
+# print(paste("El índice Kappa es:", round(kappa_GLM_equipo$value, 3)))
+# 
+# kappa_GLM_equipo<-kappa_GLM_equipo$value
+```
+
+# Prediccion RANGER
+
+```{r}
+Train.rf_equipo  <- as.data.frame(trainData_equipo) 
+
+Test.rf_equipo <- as.data.frame(testData_equipo)
+```
+
+```{r}
+# objeto_recipe <- recipe(formula = Y ~ .,
+#                         data =  Train.rf_equipo)
+# 
+# objeto_recipe <- objeto_recipe %>% 
+#   step_nzv(all_predictors())
+# 
+# trained_recipe <- prep(objeto_recipe, training = Train.rf_equipo)
+# 
+# Train.rf_equipo <- bake(trained_recipe, new_data = Train.rf_equipo)
+# Test.rf_equipo  <- bake(trained_recipe, new_data = Test.rf_equipo)
+```
+
+```{r}
+# Submuestras y repeticiones
+
+# particiones  <- 5
+# repeticiones <- 15
+particiones <- 3
+repeticiones <- 5
+```
+
+```{r}
+# Specify the tunning configuration (mtry hyperparameter depends on the number of columns)
+seed.rf <- 42
+set.seed(seed.rf) 
+
+
+mtry <- c(1, 2, 3)
+min.node.size <- seq(1, 10, 2)  # Reducir el rango
+hiperparametros <- expand.grid(mtry =  mtry,
+                               #min.node.size = seq(1, 30, 2),
+                               min.node.size=min.node.size,
+                               splitrule = "gini")
+
+
+seeds <- vector(mode = "list", length = (particiones * repeticiones) + 1)
+
+for (i in 1:(particiones * repeticiones)) {
+  seeds[[i]] <- sample.int(500, nrow(hiperparametros)) 
+}
+
+seeds[[(particiones * repeticiones) + 1]] <- sample.int(500, 1)
+
+# Training control
+```
+
+
+
+```{r}
+# Training control
+
+cross_val_ranger <- trainControl(
+  method = "repeatedcv",
+  number = particiones,
+  repeats = repeticiones,
+  returnResamp = "final",
+  verboseIter = FALSE,
+  allowParallel = TRUE,
+  classProbs = TRUE,
+  seeds = seeds)
+
+# Training 
+
+# Convertir los niveles de Train.rf$sensi a números también
+
+Train.rf_equipo$Y <- factor(as.numeric(factor(Train.rf_equipo$Y)))
+Train.rf_equipo$Y <- factor(Train.rf_equipo$Y, levels = c("1", "2"))
+levels(Train.rf_equipo$Y) <- make.names(levels(Train.rf_equipo$Y))
+
+```
+
+
+
+
+
+```{r}
+class(Train.rf_equipo)
+```
+
+
+```{r}
+Train.rf_equipo <- as.data.frame(Train.rf_equipo)
+```
+
+
+```{r}
+Train.rf_equipo <- as.data.frame(Train.rf_equipo)
+
+# Convertimos Y a factor
+Train.rf_equipo$Y <- as.factor(Train.rf_equipo$Y)
+
+# Definimos número de árboles
+#n_trees <- 500 # default
+n_trees<-200
+# Establecemos semilla para reproducibilidad
+set.seed(80)
+
+# Ejecutamos el entrenamiento
+results_equipo <- caret::train(Y ~ .,
+                data = Train.rf_equipo, 
+                method = "ranger",
+                tuneGrid = hiperparametros,
+                metric = "Accuracy",
+                importance = "impurity",
+                trControl = cross_val_ranger,
+                num.trees = n_trees)
+               #allowParallel=FALSE)  
+
+
+```
+
+
+#
+#
+```{r}
+# Definir los valores de num.trees a probar
+num_trees_range <- c(10, 50, 100, 200, 500, 1000, 1500)
+
+# Lista para almacenar los modelos
+modelos_equipo <- list()
+
+# Establecer semilla para reproducibilidad
+set.seed(80)
+
+# Iterar sobre cada cantidad de árboles
+for (nt in num_trees_range) {
+  cat("Entrenando modelo con", nt, "árboles...\n")
+
+  modelos_equipo[[as.character(nt)]] <- caret::train(
+    Y ~ .,
+    data = Train.rf_equipo,
+    method = "ranger",
+    tuneGrid = hiperparametros,
+    metric = "Accuracy",
+    importance = "impurity",
+    trControl = cross_val_ranger,
+    num.trees = nt
+  )
+}
+
+```
+#
+#
+#
+```{r}
+  resultados_modelos <- data.frame(
+  num_trees = num_trees_range,
+  Accuracy = sapply(modelos_equipo, function(m) max(m$results$Accuracy, na.rm = TRUE)),
+  Kappa = sapply(modelos_equipo, function(m) max(m$results$Kappa, na.rm = TRUE)),
+  mtry = sapply(modelos_equipo, function(m) m$bestTune$mtry),
+  min.node.size = sapply(modelos_equipo, function(m) m$bestTune$min.node.size)
+)
+
+# Ordenamos los modelos de mejor a peor Accuracy
+resultados_modelos <- resultados_modelos[order(-resultados_modelos$Accuracy), ]
+
+print(head(resultados_modelos, 20))
+#
+```
+#
+#
+```{r}
+# # Encontrar el índice del modelo con mejor Accuracy en la tabla de resultados
+mejor_idx <- which.max(resultados_modelos$Accuracy)
+
+# Extraer la mejor combinación de hiperparámetros
+mejor_num_trees <- resultados_modelos$num_trees[mejor_idx]
+mejor_mtry <- resultados_modelos$mtry[mejor_idx]
+mejor_min_node_size <- resultados_modelos$min.node.size[mejor_idx]
+
+# Extraer el modelo correspondiente en la lista
+mejor_modelo <- modelos_equipo[[as.character(mejor_num_trees)]]
+
+# Mostrar los hiperparámetros seleccionados
+cat("Mejor modelo seleccionado:\n")
+cat("Número de árboles:", mejor_num_trees, "\n")
+cat("mtry:", mejor_mtry, "\n")
+cat("min.node.size:", mejor_min_node_size, "\n")
+
+# Mostrar detalles del mejor modelo
+print(mejor_modelo)
+
+```
+
+
+
+```{r}
+
+
+rf_cv<-function(df_train, model, grid, metrica, title, num.trees){
+
+ranger_equipo <- caret::train(
+  Y ~ .,
+  data = df_train,
+  method = "ranger",
+  tuneGrid = hiperparametros,
+  metric = "Accuracy",
+  importance = "impurity",
+  trControl = cross_val_ranger,  # Si querés usar validación cruzada
+  num.trees=num.trees  # Número de árboles fijo
+)
+
+return(ranger_equipo)
+}
+
+#
+
+ranger_equipo<-rf_cv(Train.rf_equipo,"ranger",hiperparametros,"Accuracy", num.trees=mejor_num_trees)
+
+# ranger_equipo <- caret::train(
+#   Y ~ .,
+#   data = Train.rf_equipo,
+#   method = "ranger",
+#   tuneGrid = data.frame(mtry = 2, min.node.size = 1, splitrule = "gini"),
+#   metric = "Accuracy",
+#   importance = "impurity",
+#   trControl = cross_val,  # Si querés usar validación cruzada
+#   num.trees = 200  # Número de árboles fijo
+# )
+
+```
+
+
+
+```{r}
+Test.rf_equipo$Y<-as.factor(Test.rf_equipo$Y)
+str(Test.rf_equipo$Y)
+```
+
+```{r}
+testRF_NOID_equipo <- Test.rf_equipo[, -which(names(Test.rf_equipo) == "Y")]
+
+```
+
+
+
+```{r}
+#prediccionesRF1<-predict(resultadosRF, newdata = dataNOID_test)
+
+predRANGER_equipo<-predict(ranger_equipo, newdata = testRF_NOID_equipo)#matriz binarizada
+print(predRANGER_equipo)
+
+predRANGER_equipo <- factor(predRANGER_equipo, levels = c("X1", "X2"), labels = c("Cov.Neg", "Cov.Pos"))
+# Obtener las etiquetas reales del conjunto de datos de prueba
+#y_test <- testData$Y
+y_test <- factor(Test.rf_equipo$Y, labels = c("Cov.Neg", "Cov.Pos"))
+
+prob_predRanger_equipo <- predict(ranger_equipo, newdata = testRF_NOID_equipo, type = "prob")
+
+colnames(prob_predRanger_equipo)
+
+# Asegúrate de que y_test sea un factor con los niveles correctos
+
+```
+
+
+```{r}
+library(pROC)
+
+# Asegúrate de que y_test sea numérico y esté alineado con los niveles 1 y 2
+y_test_numeric <- as.numeric(y_test)
+
+roc_curve <- roc(response = y_test_numeric, 
+                 predictor = prob_predRanger_equipo[, "X2"], 
+                 levels = c(1, 2))
+AUC_Ranger_equipo <- auc(roc_curve)
+print(paste("El valor de AUC es:", round(AUC_Ranger_equipo, 3)))
+
+# Visualiza la curva ROC
+plot(roc_curve, main = "Curva ROC", col = "blue", lwd = 2)
+
+# confusion_matrixRANGER <- table(predRANGER_equipo, y_test)
+# # Imprimir la matriz de confusión
+# print(confusion_matrixRANGER)
+RANGER_metrics_equipo <- caret::confusionMatrix(predRANGER_equipo, y_test, positive = "Cov.Pos")
+```
+
+```{r}
+# Accede a los componentes overall y byClass
+# Métricas generales
+accuracyRANGER_equipo <- RANGER_metrics_equipo$overall["Accuracy"]
+kappaRANGER_equipo <- RANGER_metrics_equipo$overall["Kappa"]
+
+# Métricas por clase
+sensitivityRANGER_equipo <- RANGER_metrics_equipo$byClass["Sensitivity"]
+specificityRANGER_equipo <- RANGER_metrics_equipo$byClass["Specificity"]
+precisionRANGER_equipo<- RANGER_metrics_equipo$byClass["Pos Pred Value"]
+recallRANGER_equipo <- RANGER_metrics_equipo$byClass["Sensitivity"]  # Igual a sensitivity
+f1_scoreRANGER_equipo <- RANGER_metrics_equipo$byClass["F1"]
+npvRANGER_equipo <- RANGER_metrics_equipo$byClass["Neg Pred Value"]
+prevalenceRANGER_equipo <- RANGER_metrics_equipo$byClass["Prevalence"]
+detection_rateRANGER_equipo <- RANGER_metrics_equipo$byClass["Detection Rate"]
+balanced_accuracyRANGER_equipo <- RANGER_metrics_equipo$byClass["Balanced Accuracy"]
+
+# Calcular LR+ y LR- que no vienen directamente en confusionMatrix
+LR_plusRANGER_equipo <- sensitivityRANGER_equipo / (1 - specificityRANGER_equipo)
+LR_minusRANGER_equipo<- (1 - sensitivityRANGER_equipo) / specificityRANGER_equipo
+
+# Para manejar valores especiales
+LR_plusRANGER_equipoo <- ifelse(is.nan(LR_plusRANGER_equipo) | is.infinite(LR_plusRANGER_equipo), NA, LR_plusRANGER_equipo)
+
+LR_minusRANGER_equipo <- ifelse(is.nan(LR_minusRANGER_equipo) | is.infinite(LR_minusRANGER_equipo), NA, LR_minusRANGER_equipo)
+
+
+metrics_RANGER_equipo <- data.frame(
+  Metric = c("Accuracy", "Kappa", "Sensitivity", "Specificity", "Precision", 
+             "F1_Score", "NPV", "Prevalence", "Detection_Rate", 
+             "Balanced_Accuracy", "LR+", "LR-", "AUC"),
+  RANGER_equipo_tot = c(accuracyRANGER_equipo, kappaRANGER_equipo, sensitivityRANGER_equipo, specificityRANGER_equipo, precisionRANGER_equipo, f1_scoreRANGER_equipo, npvRANGER_equipo, prevalenceRANGER_equipo, detection_rateRANGER_equipo, 
+            balanced_accuracyRANGER_equipo, LR_plusRANGER_equipo, LR_minusRANGER_equipo, AUC_Ranger_equipo)
+)
+print(metrics_RANGER_equipo)
+```
+
+
+
+###Desafio con ciego
+
+```{r}
+ciego_data <- as.data.frame(ciego_combat_corrected_equipo_tot)
+
+# Si viene con columna Y (conocida), separala:
+if ("Y" %in% colnames(ciego_data)) {
+  Y_ciego <- ciego_data$Y
+  X_ciego <- ciego_data[, setdiff(colnames(ciego_data), "Y")]
+} else {
+  X_ciego <- ciego_data
+  Y_ciego <- NULL
+}
+
+```
+
+
+```{r}
+# Predicciones (clase)
+predicciones_ciego <- predict(ranger_equipo, newdata = X_ciego)
+levels(predicciones_ciego) <- c("Cov.Neg", "Cov.Pos")
+
+# Predicciones (probabilidades)
+prob_ciego <- predict(ranger_equipo, newdata = X_ciego, type = "prob")
+prob_ciego <- prob_ciego %>%
+  rename(Cov.Neg = X1, Cov.Pos = X2)
+
+
+  # Confusion matrix
+  ciego_ranger_tot_equipo<-caret::confusionMatrix(predicciones_ciego, Y_ciego, positive = "Cov.Pos")
+
+  # AUC
+  library(pROC)
+  Y_ciego_num <- as.numeric(Y_ciego)
+  roc_ciego <- roc(Y_ciego_num, prob_ciego[, "Cov.Pos"])
+  plot(roc_ciego, main = "ROC en Datos Ciegos", col = "darkgreen", lwd = 2)
+  AUC_Ranger_equipo_ciego<-auc(roc_ciego)
+
+
+  
+  
+  
+accuracyRANGER_equipo_ciego <- ciego_ranger_tot_equipo$overall["Accuracy"]
+kappaRANGER_equipo_ciego <- ciego_ranger_tot_equipo$overall["Kappa"]
+
+# Métricas por clase
+sensitivityRANGER_equipo_ciego <- ciego_ranger_tot_equipo$byClass["Sensitivity"]
+specificityRANGER_equipo_ciego <- ciego_ranger_tot_equipo$byClass["Specificity"]
+precisionRANGER_equipo_ciego<- ciego_ranger_tot_equipo$byClass["Pos Pred Value"]
+recallRANGER_equipo_ciego <- ciego_ranger_tot_equipo$byClass["Sensitivity"]  # Igual a sensitivity
+f1_scoreRANGER_equipo_ciego <- ciego_ranger_tot_equipo$byClass["F1"]
+npvRANGER_equipo_ciego <- ciego_ranger_tot_equipo$byClass["Neg Pred Value"]
+prevalenceRANGER_equipo_ciego <- ciego_ranger_tot_equipo$byClass["Prevalence"]
+detection_rateRANGER_equipo_ciego <- ciego_ranger_tot_equipo$byClass["Detection Rate"]
+balanced_accuracyRANGER_equipo_ciego <- ciego_ranger_tot_equipo$byClass["Balanced Accuracy"]
+
+# Calcular LR+ y LR- que no vienen directamente en confusionMatrix
+LR_plusRANGER_equipo_ciego <- sensitivityRANGER_equipo_ciego / (1 - specificityRANGER_equipo_ciego)
+LR_minusRANGER_equipo_ciego<- (1 - sensitivityRANGER_equipo_ciego) / specificityRANGER_equipo_ciego
+
+# Para manejar valores especiales
+LR_plusRANGER_equipo_ciego <- ifelse(is.nan(LR_plusRANGER_equipo_ciego) | is.infinite(LR_plusRANGER_equipo_ciego), NA, LR_plusRANGER_equipo_ciego)
+
+LR_minusRANGER_equipo_ciego <- ifelse(is.nan(LR_minusRANGER_equipo_ciego) | is.infinite(LR_minusRANGER_equipo_ciego), NA, LR_minusRANGER_equipo_ciego)
+
+
+metrics_RANGER_equipo_ciego <- data.frame(
+  Metric = c("Accuracy", "Kappa", "Sensitivity", "Specificity", "Precision", 
+             "F1_Score", "NPV", "Prevalence", "Detection_Rate", 
+             "Balanced_Accuracy", "LR+", "LR-", "AUC"),
+  RANGER_equipo_tot = c(accuracyRANGER_equipo_ciego, kappaRANGER_equipo_ciego, sensitivityRANGER_equipo_ciego, specificityRANGER_equipo_ciego, precisionRANGER_equipo_ciego, f1_scoreRANGER_equipo_ciego, npvRANGER_equipo_ciego, prevalenceRANGER_equipo_ciego, detection_rateRANGER_equipo_ciego, 
+            balanced_accuracyRANGER_equipo_ciego, LR_plusRANGER_equipo_ciego, LR_minusRANGER_equipo_ciego, AUC_Ranger_equipo_ciego)
+)
+print(metrics_RANGER_equipo_ciego)  
+```
+
+
+
+
+```{r}
+# # Precisión (Accuracy)
+# accuracy_RANGER_eq <- sum(diag(confusion_matrixRANGER)) / sum(confusion_matrixRANGER)
+# print(paste("La precisión (Accuracy) es:", round(accuracy_RANGER_eq,2)))
+# 
+# # Sensibilidad (Recall o TPR)
+# sensitivity_RANGER_eq <- confusion_matrixRANGER[2, 2] / sum(confusion_matrixRANGER[, 2])
+# print(paste("La sensibilidad es:", round(sensitivity_RANGER_eq,2)))
+# 
+# # Especificidad (TNR)
+# specificity_RANGER_eq <- confusion_matrixRANGER[1, 1] / sum(confusion_matrixRANGER[, 1])
+# print(paste("la especificidad es:", round(specificity_RANGER_eq,2)))
+# 
+# # Valor Predictivo Positivo (PPV o Precision)
+# ppv_RANGER_eq<- confusion_matrixRANGER[2, 2] / sum(confusion_matrixRANGER[2, ])
+# print(paste("el VPP es:", round(ppv_RANGER_eq,2)))
+# 
+# # Valor Predictivo Negativo (VPN)
+# npv_RANGER_eq<- confusion_matrixRANGER[1, 1] / sum(confusion_matrixRANGER[1, ])
+# print(paste("el VPN es: ",  round(npv_RANGER_eq,2)))
+
+
+```
+
+
+```{r}
+# 
+# library(irr)
+# 
+# # Calcular Kappa
+# kappa_RANGEReq <- kappa2(cbind(predRANGER_equipo, Test.rf_equipo$Y))
+# 
+# # Ver el valor de Kappa
+# print(paste("El índice Kappa es:", round(kappa_RANGEReq$value, 3)))
+# kappa_RANGEReq<-round(kappa_RANGEReq$value, 3)
+```
+
+
+# Modelos (con datos combat_corrected POR EQUIPO dicotomizado)
+
+
+```{r}
+combat_corrected_equipo_tot<- cbind(combat_corrected_equipo_tot, label=Datos_actualizados$PCR.Cov)#1=neg,2=pos
+combat_corrected_equipo_tot<-as.data.frame(combat_corrected_equipo_tot)
+combat_corrected_equipo_tot$label <- as.factor(combat_corrected_equipo_tot$label)
+```
+
+
+
+
+```{r}
+combat_corrected_equipo_tot_dic<-combat_corrected_equipo_tot[1:542,]
+
+ciego_combat_corrected_equipo_tot_dic<-combat_corrected_equipo_tot[543:694,]
+```
+
+
+
+```{r}
+
+library(tidymodels)
+# set.seed asegura reproducibilidad
+set.seed(42)
+
+#Utilizo tidymodels para dividir de manera proporcional
+
+split_data <- initial_split(combat_corrected_equipo_tot_dic, strata = "label", prop = 0.8)
+
+# Obtener los conjuntos de entrenamiento y prueba
+trainData_equipo_dico <- training(split_data)
+testData_equipo_dico <- testing(split_data)
+
+```
+
+```{r}
+trainData_equipo_dico<-as.data.frame(trainData_equipo_dico)
+trainData_equipo_dico$label<-as.factor(trainData_equipo_dico$label)
+str(trainData_equipo_dico)
+```
+
+
+
+
+```{r}
+library(dplyr)
+#trainData_equipo_dico <- trainData_equipo_dico %>% rename(Y = label)
+trainData_equipo_dico<-trainData_equipo_dico[,-ncol(trainData_equipo_dico)]
+str(trainData_equipo_dico$Y)
+```
+
+
+```{r}
+train_subset<-trainData_equipo_dico[,-ncol(trainData_equipo_dico)]
+```
+
+
+```{r}
+#Dicotimizacion de la matriz de intensidad
+ #optimizeThreshold uses (approximate) mutual information to determine the optimal thresholds. Specifically, the thresholds are chosen to maximize the mutual information between response and each variable
+thr <- optimizeThreshold(train_subset, trainData_equipo_dico$Y)
+train_subset <- dichotomize(train_subset, thr) #2 MATRIZ DE INTENSIDAD DICOTOMIZADA
+
+```
+
+
+```{r}
+trainData_equipo_dico<- cbind(train_subset, trainData_equipo_dico$Y)#1=neg,2=pos
+```
+
+
+
+```{r}
+str(trainData_equipo_dico)
+trainData_equipo_dico<-as.data.frame(trainData_equipo_dico)
+```
+
+
+
+
+
+```{r}
+# library(dplyr)
+# trainData_equipo_dico<-as.data.frame(trainData_equipo_dico)
+# trainData_equipo_dico <- trainData_equipo_dico %>% rename(Y = V64)
+# str(trainData_equipo_dico$Y)
+
+# OPCIÓN 1: Usando índice de última columna (MÁS SIMPLE)
+trainData_equipo_dico <- as.data.frame(trainData_equipo_dico)
+names(trainData_equipo_dico)[ncol(trainData_equipo_dico)] <- "Y"
+str(trainData_equipo_dico$Y)
+```
+
+
+```{r}
+trainData_equipo_dico<-as.data.frame(trainData_equipo_dico)
+trainData_equipo_dico$Y<-as.factor(trainData_equipo_dico$Y)
+str(trainData_equipo_dico)
+```
+
+
+
+```{r}
+zero_var_indices <- nearZeroVar(trainData_equipo_dico[, -ncol(trainData_equipo_dico)])
+
+if (length(zero_var_indices) > 0) {
+    trainData_equipo_dico <- trainData_equipo_dico[, -zero_var_indices]
+}
+
+```
+
+
+
+```{r}
+train_subset<-trainData_equipo_dico[,-ncol(trainData_equipo_dico)]
+thr_filtered <- thr[colnames(train_subset)]
+```
+
+
+quedan 37 variables
+
+
+```{r}
+testData_equipo_dico<-as.data.frame(testData_equipo_dico)
+testData_equipo_dico$label<-as.factor(testData_equipo_dico$label)
+testData_equipo_dico<-testData_equipo_dico[,-ncol(testData_equipo_dico)]
+str(testData_equipo_dico)
+```
+
+
+
+```{r}
+# library(dplyr)
+# testData_equipo_dico <- testData_equipo_dico %>% rename(Y = label)
+# str(testData_equipo_dico$Y)
+```
+
+
+
+```{r}
+test_subset <- testData_equipo_dico[, -ncol(testData_equipo_dico)]
+
+```
+
+
+```{r}
+library(dplyr)
+
+str(testData_equipo_dico$Y)
+```
+
+
+
+
+```{r}
+test_subset <- test_subset[, colnames(train_subset)]
+#test_subset <-  test_subset[, colnames(trainData_equipo_dico)]
+thr_filtered <-  thr[colnames(train_subset)]
+#Dicotimizacion de la matriz de intensidad
+test_subset <- dichotomize(test_subset, thr_filtered) 
+
+
+```
+
+
+```{r}
+testData_equipo_dico<- cbind(test_subset, testData_equipo_dico$Y)#1=neg,2=pos
+```
+
+```{r}
+library(dplyr)
+testData_equipo_dico<-as.data.frame(testData_equipo_dico)
+names(testData_equipo_dico)[ncol(testData_equipo_dico)] <- "Y"
+str(testData_equipo_dico$Y)
+str(testData_equipo_dico$Y)
+```
+
+```{r}
+str(testData_equipo_dico)
+```
+
+
+
+
+```{r}
+testData_equipo_dico<-as.data.frame(testData_equipo_dico)
+testData_equipo_dico$Y<-as.factor(testData_equipo_dico$Y)
+str(testData_equipo_dico)
+```
+
+
+
+
+```{r}
+# Ver la distribución de clases en ambos conjuntos
+table(trainData_equipo_dico$Y)
+table(testData_equipo_dico$Y)
+
+
+```
+
+
+
+```{r}
+library(caret)
+#set.seed(42)
+#control1 <- trainControl(method = "cv", number = 5)
+#en esta primera vez pruebo con crossval
+```
+
+```{r}
+# Especificar la variable dependiente en la fórmula
+formula <- Y ~ .
+```
+
+```{r}
+#accuracy=Es la proporción de predicciones correctas realizadas por el modelo con respecto al total de predicciones.
+
+#kappa= Es una métrica que mide el grado de acuerdo entre las predicciones del modelo y las clases verdaderas, ajustando por la posibilidad de que el acuerdo se deba al azar.
+```
+
+
+```{r}
+class(trainData_equipo_dico)
+```
+
+
+```{r}
+trainData_equipo_dico$Y <- factor(trainData_equipo_dico$Y)  # Asegura que Y sea un factor
+levels(trainData_equipo_dico$Y) <- make.names(levels(trainData_equipo_dico$Y))  # Corrige los nombres
+```
+
+
+
+```{r}
+# library(caret)
+# #control1 <- trainControl(method = "cv", number = 10)
+# grid_rf <- expand.grid(mtry = c(2, 5, 10)) #the randomForest package only has one available tuning parameter, mtry.
+# #set.seed(42)
+# rf_equipo_dic <- caret::train(Y ~ ., data = trainData_equipo_dico, 
+#                       method = "rf",   # Método para random forest
+#                       trControl = cross_val, 
+#                       tuneGrid = grid_rf,  # Parámetro mtry
+#                       metric = "Accuracy")  # Métrica para clasificación
+
+```
+
+```{r}
+# rf_equipo_dic$results
+```
+
+```{r}
+# plot(rf_equipo_dic)
+```
+
+
+
+
+
+
+
+# KNN
+
+```{r}
+# tuneGrid <- expand.grid(k = 1:15)
+# #set.seed(42)
+# # Ajustar el modelo KNN
+# KNN_equipo_dic <- caret::train(formula, 
+#                     data = trainData_equipo_dico, 
+#                     trControl = cross_val, 
+#                     method = "knn", 
+#                     metric = "Accuracy", 
+#                     preProcess = c("center","scale"),
+#                     tuneGrid = tuneGrid)
+# 
+# 
+# ```
+# 
+# ```{r}
+# plot(KNN_equipo_dic)
+# ```
+# 
+# # GLMNET
+# 
+# ```{r}
+# 
+# tuneGrid <- expand.grid(
+#   alpha = seq(0, 1, by = 0.1),  # From 0 (Ridge) to 1 (Lasso)
+#   lambda = 10^seq(-3, 3, length = 100)  # Logarithmic scale for lambda
+# )
+# #set.seed(42)
+# GLM_equipo_dic<- caret::train(formula, 
+#                   data = trainData_equipo_dico,  
+#                    method = "glmnet",
+#                    metric = "Accuracy",
+#                    tuneLength = 3,
+#                    trControl = cross_val,
+#                   tuneGrid=tuneGrid)
+# 
+# GLM_equipo_dic 
+# ```
+# 
+# ```{r}
+# # Imprimir los mejores hiperparámetros
+# best_params <- GLM_equipo_dic$bestTune
+# print("Best Hyperparameters:")
+# print(best_params)
+# 
+# # Extraer accuracy y kappa del mejor modelo
+# # Buscamos la fila que corresponde a los mejores hiperparámetros en el data frame model$results
+# best_model_index <- apply(GLM_equipo_dic$results, 1, function(row) {
+#   all(row[1:length(best_params)] == as.numeric(best_params))
+# })
+# 
+# best_model_results <- GLM_equipo_dic$results[best_model_index, ]
+# 
+# # Imprimir accuracy y kappa del mejor modelo
+# accuracy <- best_model_results$Accuracy
+# kappa <- best_model_results$Kappa
+# 
+# print("Accuracy of the Best Model:")
+# print(accuracy)
+# 
+# print("Kappa of the Best Model:")
+# print(kappa)
+
+```
+
+
+------------------------------------------------------------------------------------------------
+```{r}
+entrenar_modelo <- function(data, formula, metodo, tuneGrid, preProcess = NULL, cross_val, metric = "Accuracy") {
+  modelo <- caret::train(
+    formula,
+    data = data,
+    method = metodo,
+    tuneGrid = tuneGrid,
+    trControl = cross_val,
+    metric = metric,
+    preProcess = preProcess
+  )
+  
+  # Mostrar resultados
+  print(modelo)
+  plot(modelo)
+  
+  # Extraer mejor combinación de hiperparámetros
+  best_params <- modelo$bestTune
+  best_row <- apply(modelo$results, 1, function(row) {
+    all(row[1:length(best_params)] == as.numeric(best_params))
+  })
+  best_metrics <- modelo$results[best_row, c("Accuracy", "Kappa")]
+  
+  cat("\n>> Métricas del mejor modelo (", metodo, "):\n", sep = "")
+  print(best_params)
+  print(best_metrics)
+
+  return(modelo)
+}
+
+```
+
+
+
+```{r}
+# Asegurar que Y sea un factor con nombres válidos
+trainData_equipo_dico$Y <- factor(trainData_equipo_dico$Y)
+levels(trainData_equipo_dico$Y) <- make.names(levels(trainData_equipo_dico$Y))
+
+# Fórmula
+formula <- Y ~ .
+
+# RANDOM FOREST
+grid_rf <- expand.grid(mtry = c(2, 5, 10))
+rf_equipo_dic <- entrenar_modelo(
+  data = trainData_equipo_dico,
+  formula = formula,
+  metodo = "rf",
+  tuneGrid = grid_rf,
+  cross_val = cross_val_rf
+)
+
+plot(rf_equipo_dic)
+```
+
+
+```{r}
+
+# KNN
+grid_knn <- expand.grid(k = 1:15)
+KNN_equipo_dic <- entrenar_modelo(
+  data = trainData_equipo_dico,
+  formula = formula,
+  metodo = "knn",
+  tuneGrid = grid_knn,
+  preProcess = c("center", "scale"),
+  cross_val = cross_val_knn
+)
+
+plot(KNN_equipo_dic)
+
+```
+
+
+
+```{r}
+# GLMNET
+grid_glmnet <- expand.grid(
+  alpha = seq(0, 1, by = 0.1),
+  lambda = 10^seq(-3, 3, length = 100)
+)
+GLM_equipo_dic <- entrenar_modelo(
+  data = trainData_equipo_dico,
+  formula = formula,
+  metodo = "glmnet",
+  tuneGrid = grid_glmnet,
+  cross_val = cross_val_glm
+)
+
+
+
+
+
+library(ggplot2)
+
+# Convertir resultados a data.frame
+res <- GLM_equipo_dic$results
+
+# Plot con ggplot y escala logarítmica en lambda
+ggplot(res, aes(x = lambda, y = Accuracy, color = as.factor(alpha))) +
+  geom_point() +
+  scale_x_log10() +
+  labs(
+    x = "Lambda (log10 scale)",
+    y = "Accuracy (CV)",
+    color = "Alpha",
+    title = "GLMNET: Accuracy vs Lambda & Alpha"
+  ) +
+  theme_minimal()
+
+```
+
+
+------------------------------------------------------------------------------------------------
+#  Predicciones combat por equipo dicotomizado
+
+```{r}
+testData_equipo_dico$Y<-as.factor(testData_equipo_dico$Y)
+str(testData_equipo_dico$Y)
+```
+
+```{r}
+testData_NOID_equipo_dico <- testData_equipo_dico[, -which(names(testData_equipo_dico) == "Y")]
+
+```
+
+# RF
+
+```{r}
+#prediccionesRF1<-predict(resultadosRF, newdata = dataNOID_test)
+predRF_equipo_dico<-predict(rf_equipo_dic, newdata = testData_NOID_equipo_dico)#matriz binarizada
+print(predRF_equipo_dico)
+predRF_equipo_dico <- factor(as.character(predRF_equipo_dico), 
+                             levels = c("X1", "X2"),
+                             labels = c("1", "2"))
+
+predRF_equipo_dico <- factor(predRF_equipo_dico, levels = c("1", "2"), labels = c("Cov.Neg", "Cov.Pos"))
+# Obtener las etiquetas reales del conjunto de datos de prueba
+#y_test <- testData$Y
+
+prob_predRFC <- predict(rf_equipo_dic, newdata = testData_NOID_equipo_dico, type = "prob")
+
+colnames(prob_predRFC)
+
+
+# Asegúrate de que y_test sea un factor con los niveles correctos
+y_test <- factor(testData_equipo_dico$Y, levels = c(1, 2), labels = c("Cov.Neg", "Cov.Pos"))
+
+
+
+
+```
+
+
+```{r}
+library(pROC)
+
+# Asegúrate de que y_test sea numérico y esté alineado con los niveles 1 y 2
+y_test_numeric <- as.numeric(y_test)
+
+roc_curve <- roc(response = y_test_numeric, predictor = prob_predRFC[, "X2"], levels = c(1, 2))
+AUC_RF_equipo_dic <- auc(roc_curve)
+
+print(paste("El valor de AUC es:", round(AUC_RF_equipo_dic, 3)))
+
+# Visualiza la curva ROC
+plot(roc_curve, main = "Curva ROC", col = "blue", lwd = 2)
+```
+
+
+```{r}
+# confusion_matrixRF <- table(predRF_equipo_dico, y_test)
+# # Imprimir la matriz de confusión
+# print(confusion_matrixRF)
+RFdico_metrics_equipo <- caret::confusionMatrix(predRF_equipo_dico, y_test, positive = "Cov.Pos")
+```
+
+
+```{r}
+accuracyRF_dico <- RFdico_metrics_equipo$overall["Accuracy"]
+kappaRF_dico <- RFdico_metrics_equipo$overall["Kappa"]
+
+# Métricas por clase
+sensitivityRF_dico <- RFdico_metrics_equipo$byClass["Sensitivity"]
+specificityRF_dico <- RFdico_metrics_equipo$byClass["Specificity"]
+precisionRF_dico <- RFdico_metrics_equipo$byClass["Pos Pred Value"]
+recallRF_dico <- RFdico_metrics_equipo$byClass["Sensitivity"]  # Igual a sensitivity
+f1_scoreRF_dico <- RFdico_metrics_equipo$byClass["F1"]
+npvRF_dico <- RFdico_metrics_equipo$byClass["Neg Pred Value"]
+prevalenceRF_dico <- RFdico_metrics_equipo$byClass["Prevalence"]
+detection_rateRF_dico <- RFdico_metrics_equipo$byClass["Detection Rate"]
+balanced_accuracyRF_dico <- RFdico_metrics_equipo$byClass["Balanced Accuracy"]
+
+# Calcular LR+ y LR- que no vienen directamente en confusionMatrix
+LR_plusRF_dico <- sensitivityRF_dico / (1 - specificityRF_dico)
+LR_minusRF_dico <- (1 - sensitivityRF_dico) / specificityRF_dico
+
+# Para manejar valores especiales
+LR_plusRF_dico <- ifelse(is.nan(LR_plusRF_dico) | is.infinite(LR_plusRF_dico), NA, LR_plusRF_dico)
+LR_minusRF_dico <- ifelse(is.nan(LR_minusRF_dico) | is.infinite(LR_minusRF_dico), NA, LR_minusRF_dico)
+
+```
+
+```{r}
+metrics_rfdico_equipo <- data.frame(
+  Metric = c("Accuracy", "Kappa", "Sensitivity", "Specificity", "Precision", 
+             "F1_Score", "NPV", "Prevalence", "Detection_Rate", 
+             "Balanced_Accuracy", "LR+", "LR-", "AUC"),
+  rfdico_equipo_tot = c(accuracyRF_dico, kappaRF_dico, sensitivityRF_dico, specificityRF_dico, precisionRF_dico, 
+            f1_scoreRF_dico, npvRF_dico, prevalenceRF_dico, detection_rateRF_dico, 
+            balanced_accuracyRF_dico, LR_plusRF_dico, LR_minusRF_dico, AUC_RF_equipo_dic)
+)
+
+# Mostrar los resultados
+print(metrics_rfdico_equipo)
+
+```
+
+
+# Prediccion GLM
+
+```{r}
+#prediccionesRF1<-predict(resultadosRF, newdata = dataNOID_test)
+predGLM_equipo_dic<-predict(GLM_equipo_dic, newdata = testData_NOID_equipo_dico)#matriz binarizada
+print(predGLM_equipo_dic)
+
+predGLM_equipo_dic <- factor(as.character(predGLM_equipo_dic), 
+                             levels = c("X1", "X2"),
+                             labels = c("1", "2"))
+
+predGLM_equipo_dic <- factor(predGLM_equipo_dic, levels = c("1", "2"), labels = c("Cov.Neg", "Cov.Pos"))
+
+
+# Obtener las etiquetas reales del conjunto de datos de prueba
+y_test <- testData_equipo_dico$Y
+#y_testDIC <- FeatureMatrix_Dic_df$Y#Matriz binarizada
+y_test <- factor(y_test, levels = c("1", "2"), labels = c("Cov.Neg", "Cov.Pos"))
+```
+
+
+
+```{r}
+GLMdic_metrics_equipo <- caret::confusionMatrix(predGLM_equipo_dic, y_test, positive = "Cov.Pos")
+```
+
+
+```{r}
+
+prob_predGLM <- predict(GLM_equipo_dic, newdata = testData_NOID_equipo_dico, type = "prob")
+
+# Verifica los nombres de las columnas (clases)
+print(colnames(prob_predGLM))  # Deberían ser "1" y "2" o los nombres de las clases
+
+# Asegúrate de que y_test sea numérico con niveles 1 y 2
+y_test_numeric <- as.numeric(testData_equipo_dico$Y)
+
+# Calcula la curva ROC usando la probabilidad de la clase positiva ("2")
+roc_curve_glm <- roc(response = y_test_numeric, predictor = prob_predGLM[, "X2"], levels = c(1, 2))
+
+# Calcula el AUC
+AUC_GLM_equipo_dic <- auc(roc_curve_glm)
+print(paste("El valor de AUC es:", round(AUC_GLM_equipo_dic, 3)))
+
+# Visualiza la curva ROC
+plot(roc_curve_glm, main = "Curva ROC - GLM", col = "red", lwd = 2)
+```
+
+
+
+```{r}
+accuracyGLM_equipo_dic <- GLMdic_metrics_equipo$overall["Accuracy"]
+kappaGLM_equipo_dic <- GLMdic_metrics_equipo$overall["Kappa"]
+# Métricas por clase
+sensitivityGLM_equipo_dic <- GLMdic_metrics_equipo$byClass["Sensitivity"]
+specificityGLM_equipo_dic <- GLMdic_metrics_equipo$byClass["Specificity"]
+precisionGLM_equipo_dic <- GLMdic_metrics_equipo$byClass["Pos Pred Value"]
+recallGLM_equipo_dic <- GLMdic_metrics_equipo$byClass["Sensitivity"]  # Igual a sensitivity
+f1_scoreGLM_equipo_dic <- GLMdic_metrics_equipo$byClass["F1"]
+npvGLM_equipo_dic <- GLMdic_metrics_equipo$byClass["Neg Pred Value"]
+prevalenceGLM_equipo_dic <- GLMdic_metrics_equipo$byClass["Prevalence"]
+detection_rateGLM_equipo_dic <- GLMdic_metrics_equipo$byClass["Detection Rate"]
+balanced_accuracyGLM_equipo_dic <- GLMdic_metrics_equipo$byClass["Balanced Accuracy"]
+
+# Calcular LR+ y LR- que no vienen directamente en confusionMatrix
+LR_plusGLM_equipo_dic <- sensitivityGLM_equipo_dic / (1 - specificityGLM_equipo_dic)
+LR_minusGLM_equipo_dic <- (1 - sensitivityGLM_equipo_dic) / specificityGLM_equipo_dic
+
+# Para manejar valores especiales
+LR_plusGLM_equipo_dic <- ifelse(is.nan(LR_plusGLM_equipo_dic) | is.infinite(LR_plusGLM_equipo_dic), NA, LR_plusGLM_equipo_dic)
+LR_minusGLM_equipo_dic <- ifelse(is.nan(LR_minusGLM_equipo_dic) | is.infinite(LR_minusGLM_equipo_dic), NA, LR_minusGLM_equipo_dic)
+
+# Crear un dataframe con todas las métricas
+metrics_GLM_equipo_dic_equipo <- data.frame(
+  Metric = c("Accuracy", "Kappa", "Sensitivity", "Specificity", "Precision", 
+             "F1_Score", "NPV", "Prevalence", "Detection_Rate", 
+             "Balanced_Accuracy", "LR+", "LR-", "AUC"),
+  GLM_equipo_dic_equipo_tot = c(accuracyGLM_equipo_dic, kappaGLM_equipo_dic, sensitivityGLM_equipo_dic, specificityGLM_equipo_dic, precisionGLM_equipo_dic, 
+            f1_scoreGLM_equipo_dic, npvGLM_equipo_dic, prevalenceGLM_equipo_dic, detection_rateGLM_equipo_dic, 
+            balanced_accuracyGLM_equipo_dic, LR_plusGLM_equipo_dic, LR_minusGLM_equipo_dic, AUC_GLM_equipo_dic))
+
+# Mostrar los resultados
+print(metrics_GLM_equipo_dic_equipo)
+
+```
+
+
+
+# Prediccion KNN
+
+```{r}
+#prediccionesRF1<-predict(resultadosRF, newdata = dataNOID_test)
+predKNN_equipo_dic<-predict(KNN_equipo_dic, newdata = testData_NOID_equipo_dico)#matriz binarizada
+print(predKNN_equipo_dic)
+
+predKNN_equipo_dic <- factor(as.character(predKNN_equipo_dic), 
+                             levels = c("X1", "X2"),
+                             labels = c("1", "2"))
+predKNN_equipo_dic <- factor(predKNN_equipo_dic, levels = c("1", "2"), labels = c("Cov.Neg", "Cov.Pos"))
+
+# Obtener las etiquetas reales del conjunto de datos de prueba
+y_test <- testData_equipo_dico$Y
+#y_testDIC <- FeatureMatrix_Dic_df$Y#Matriz binarizada
+y_test <- factor(y_test, levels = c("1", "2"), labels = c("Cov.Neg", "Cov.Pos"))
+```
+
+```{r}
+
+KNN_dic_metrics_equipo <- caret::confusionMatrix(predKNN_equipo_dic, y_test, positive = "Cov.Pos")
+```
+
+
+
+```{r}
+
+prob_predKNNC <- predict(KNN_equipo_dic, newdata = testData_NOID_equipo_dico, type = "prob")
+
+# Verifica los nombres de las columnas (clases)
+print(colnames(prob_predKNNC))  # Deberían ser "1" y "2" o los nombres de las clases
+
+# Asegúrate de que y_test sea numérico con niveles 1 y 2
+y_test_numeric <- as.numeric(testData_equipo_dico$Y)
+
+# Calcula la curva ROC usando la probabilidad de la clase positiva ("2")
+roc_curve_knn <- roc(response = y_test_numeric, predictor = prob_predKNNC[, "X2"], levels = c(1, 2))
+
+# Calcula el AUC
+AUC_KNN_equipo_dic <- auc(roc_curve_knn)
+print(paste("El valor de AUC es:", round(AUC_KNN_equipo_dic, 3)))
+
+# Visualiza la curva ROC
+plot(roc_curve_knn, main = "Curva ROC - KNN", col = "blue", lwd = 2)
+```
+
+
+
+```{r}
+accuracyKNN_equipo_dic <- KNN_dic_metrics_equipo$overall["Accuracy"]
+kappaKNN_equipo_dic <- KNN_dic_metrics_equipo$overall["Kappa"]
+# Métricas por clase
+sensitivityKNN_equipo_dic<- KNN_dic_metrics_equipo$byClass["Sensitivity"]
+specificityKNN_equipo_dic <- KNN_dic_metrics_equipo$byClass["Specificity"]
+precisionKNN_equipo_dic <- KNN_dic_metrics_equipo$byClass["Pos Pred Value"]
+recallKNN_equipo_dic<- KNN_dic_metrics_equipo$byClass["Sensitivity"]  # Igual a sensitivity
+f1_scoreKNN_equipo_dic <- KNN_dic_metrics_equipo$byClass["F1"]
+npvKNN_equipo_dic <- KNN_dic_metrics_equipo$byClass["Neg Pred Value"]
+prevalenceKNN_equipo_dic <- KNN_dic_metrics_equipo$byClass["Prevalence"]
+detection_rateKNN_equipo_dic <- KNN_dic_metrics_equipo$byClass["Detection Rate"]
+balanced_accuracyKNN_equipo_dic <- KNN_dic_metrics_equipo$byClass["Balanced Accuracy"]
+
+# Calcular LR+ y LR- que no vienen directamente en confusionMatrix
+LR_plusKNN_equipo_dic <- sensitivityKNN_equipo_dic / (1 - specificityKNN_equipo_dic)
+LR_minusKNN_equipo_dic <- (1 - sensitivityKNN_equipo_dic) / specificityKNN_equipo_dic
+
+# Para manejar valores especiales
+LR_plusKNN_equipo_dic <- ifelse(is.nan(LR_plusKNN_equipo_dic) | is.infinite(LR_plusKNN_equipo_dic), NA, LR_plusKNN_equipo_dic)
+LR_minusKNN_equipo_dic <- ifelse(is.nan(LR_minusKNN_equipo_dic) | is.infinite(LR_minusKNN_equipo_dic), NA, LR_minusKNN_equipo_dic)
+
+# Crear un dataframe con todas las métricas
+metrics_KNN_dic_equipo <- data.frame(
+  Metric = c("Accuracy", "Kappa", "Sensitivity", "Specificity", "Precision", 
+             "F1_Score", "NPV", "Prevalence", "Detection_Rate", 
+             "Balanced_Accuracy", "LR+", "LR-", "AUC"),
+  KNN_dic_equipo_tot = c(accuracyKNN_equipo_dic, kappaKNN_equipo_dic, sensitivityKNN_equipo_dic, specificityKNN_equipo_dic, precisionKNN_equipo_dic, 
+            f1_scoreKNN_equipo_dic, npvKNN_equipo_dic, prevalenceKNN_equipo_dic, detection_rateKNN_equipo_dic, 
+            balanced_accuracyKNN_equipo_dic, LR_plusKNN_equipo_dic, LR_minusKNN_equipo_dic, AUC_KNN_equipo_dic))
+
+# Mostrar los resultados
+print(metrics_KNN_dic_equipo)
+
+```
+
+```{r}
+
+ciego_combat_corrected_equipo_tot_dic
+```
+
+```{r}
+ciego_data_knn_dic <- as.data.frame(ciego_combat_corrected_equipo_tot_dic)
+
+# Si viene con columna Y (conocida), separala:
+if ("Y" %in% colnames(ciego_data_knn_dic)) {
+  Y_ciego <- ciego_data_knn_dic$Y
+  X_ciego <- ciego_data_knn_dic[, setdiff(colnames(ciego_data_knn_dic), "Y")]
+} else {
+  X_ciego <- ciego_data_knn_dic
+  Y_ciego <- NULL
+}
+
+```
+
+```{r}
+# Predicciones (clase)
+predicciones_ciego_knn_dic <- predict(KNN_equipo_dic, newdata = X_ciego)
+levels(predicciones_ciego_knn_dic) <- c("Cov.Neg", "Cov.Pos")
+
+# Predicciones (probabilidades)
+prob_ciego_knn_dic <- predict(KNN_equipo_dic, newdata = X_ciego, type = "prob")
+prob_ciego_knn_dic <- prob_ciego_knn_dic %>%
+  rename(Cov.Neg = X1, Cov.Pos = X2)
+
+
+  # Confusion matrix
+  ciego_tot_equipo_knn<-caret::confusionMatrix(predicciones_ciego_knn_dic, Y_ciego, positive = "Cov.Pos")
+
+  # AUC
+  library(pROC)
+  Y_ciego_num <- as.numeric(Y_ciego)
+  roc_ciego <- roc(Y_ciego_num, prob_ciego_knn_dic[, "Cov.Pos"])
+  plot(roc_ciego, main = "ROC en Datos Ciegos", col = "darkgreen", lwd = 2)
+  AUC_KNN_equipo_dic_ciego<-auc(roc_ciego)
+  
+  
+  
+  
+accuracyKNN_equipo_dic_ciego <- ciego_data_knn_dic$overall["Accuracy"]
+kappaKNN_equipo_dic_ciego <- ciego_data_knn_dic$overall["Kappa"]
+# Métricas por clase
+sensitivityKNN_equipo_dic_ciego<- ciego_data_knn_dic$byClass["Sensitivity"]
+specificityKNN_equipo_dic_ciego <- ciego_data_knn_dic$byClass["Specificity"]
+precisionKNN_equipo_dic_ciego <- ciego_data_knn_dic$byClass["Pos Pred Value"]
+recallKNN_equipo_dic_ciego<- ciego_data_knn_dic$byClass["Sensitivity"]  # Igual a sensitivity
+f1_scoreKNN_equipo_dic_ciego <- ciego_data_knn_dic$byClass["F1"]
+npvKNN_equipo_dic_ciego <- ciego_data_knn_dic$byClass["Neg Pred Value"]
+prevalenceKNN_equipo_dic_ciego <- ciego_data_knn_dic$byClass["Prevalence"]
+detection_rateKNN_equipo_dic_ciego <- ciego_data_knn_dic$byClass["Detection Rate"]
+balanced_accuracyKNN_equipo_dic_ciego <- ciego_data_knn_dic$byClass["Balanced Accuracy"]
+
+# Calcular LR+ y LR- que no vienen directamente en confusionMatrix
+LR_plusKNN_equipo_dic_ciego <- sensitivityKNN_equipo_dic_ciego / (1 - specificityKNN_equipo_dic_ciego)
+LR_minusKNN_equipo_dic_ciego <- (1 - sensitivityKNN_equipo_dic_ciego) / specificityKNN_equipo_dic_ciego
+
+# Para manejar valores especiales
+LR_plusKNN_equipo_dic_ciego <- ifelse(is.nan(LR_plusKNN_equipo_dic_ciego) | is.infinite(LR_plusKNN_equipo_dic_ciego), NA, LR_plusKNN_equipo_dic_ciego)
+LR_minusKNN_equipo_dic_ciego <- ifelse(is.nan(LR_minusKNN_equipo_dic_ciego) | is.infinite(LR_minusKNN_equipo_dic_ciego), NA, LR_minusKNN_equipo_dic_ciego)
+
+# Crear un dataframe con todas las métricas
+metrics_KNN_dic_equipo_ciego <- data.frame(
+  Metric = c("Accuracy", "Kappa", "Sensitivity", "Specificity", "Precision", 
+             "F1_Score", "NPV", "Prevalence", "Detection_Rate", 
+             "Balanced_Accuracy", "LR+", "LR-", "AUC"),
+  KNN_dic_equipo_tot = c(accuracyKNN_equipo_dic_ciego, kappaKNN_equipo_dic_ciego, sensitivityKNN_equipo_dic_ciego, specificityKNN_equipo_dic_ciego, precisionKNN_equipo_dic_ciego, 
+            f1_scoreKNN_equipo_dic_ciego, npvKNN_equipo_dic_ciego, prevalenceKNN_equipo_dic_ciego, detection_rateKNN_equipo_dic_ciego, 
+            balanced_accuracyKNN_equipo_dic_ciego, LR_plusKNN_equipo_dic_ciego, LR_minusKNN_equipo_dic_ciego, AUC_KNN_equipo_dic_ciego))
+
+# Mostrar los resultados
+print(metrics_KNN_dic_equipo_ciego)  
+```
+
+
+
+
+
+#RANGER
+```{r}
+Train.rf_equipo_dico  <- as.data.frame(trainData_equipo_dico) 
+
+Test.rf_equipo_dico <- as.data.frame(testData_equipo_dico)
+```
+
+```{r}
+y_train <- trainData_equipo_dico$Y
+x_train <- trainData_equipo_dico[, setdiff(names(trainData_equipo_dico), "Y")]
+y_test <- testData_equipo_dico$Y
+x_test <- testData_equipo_dico[, setdiff(names(testData_equipo_dico), "Y")]
+
+# Crear el objeto recipe solo con las variables predictoras
+objeto_recipe <- recipe(Y ~ ., data = trainData_equipo_dico)
+
+# Preparar el objeto recipe
+trained_recipe <- prep(objeto_recipe, training = trainData_equipo_dico)
+
+# Aplicar bake solo a las variables predictoras
+x_train_baked <- bake(trained_recipe, new_data = x_train)
+x_test_baked <- bake(trained_recipe, new_data = x_test)
+
+# Volver a juntar Y con los datos procesados
+trainData_equipo_dico <- cbind(x_train_baked, Y = y_train)
+testData_equipo_dico <- cbind(x_test_baked, Y = y_test)
+
+```
+
+```{r}
+# Submuestras y repeticiones
+set.seed(42)
+# particiones  <- 5
+# repeticiones <- 15
+particiones <- 3
+repeticiones <- 5
+```
+
+```{r}
+# Specify the tunning configuration (mtry hyperparameter depends on the number of columns)
+seed.rf <- 42
+set.seed(seed.rf) 
+
+
+mtry <- c(1, 2, 3)
+min.node.size <- seq(1, 10, 2)  # Reducir el rango
+hiperparametros <- expand.grid(mtry =  mtry,
+                               #min.node.size = seq(1, 30, 2),
+                               min.node.size=min.node.size,
+                               splitrule = "gini")
+
+
+seeds <- vector(mode = "list", length = (particiones * repeticiones) + 1)
+
+for (i in 1:(particiones * repeticiones)) {
+  seeds[[i]] <- sample.int(500, nrow(hiperparametros)) 
+}
+
+seeds[[(particiones * repeticiones) + 1]] <- sample.int(500, 1)
+
+# Training control
+```
+
+
+
+```{r}
+# # Training control
+# 
+# cross_val <- trainControl(
+#   method = "repeatedcv",
+#   number = particiones,
+#   repeats = repeticiones,
+#   returnResamp = "final",
+#   verboseIter = FALSE,
+#   allowParallel = TRUE,
+#   classProbs = TRUE,
+#   seeds = seeds)
+
+# Training 
+
+# Convertir los niveles de Train.rf$sensi a números también
+
+Train.rf_equipo_dico$Y <- factor(as.numeric(factor(Train.rf_equipo_dico$Y)))
+Train.rf_equipo_dico$Y <- factor(Train.rf_equipo_dico$Y, levels = c("1", "2"))
+levels(Train.rf_equipo_dico$Y) <- make.names(levels(Train.rf_equipo_dico$Y))
+
+```
+
+
+
+
+
+```{r}
+class(Train.rf_equipo_dico)
+```
+
+
+```{r}
+Train.rf_equipo_dico <- as.data.frame(Train.rf_equipo_dico)
+```
+
+
+```{r}
+# Primero aseguramos que Train.rf es un dataframe
+Train.rf_equipo_dico <- as.data.frame(Train.rf_equipo_dico)
+
+# Convertimos Y a factor
+Train.rf_equipo_dico$Y <- as.factor(Train.rf_equipo_dico$Y)
+
+# Definimos número de árboles
+#n_trees <- 500 # default
+n_trees<-100
+# Establecemos semilla para reproducibilidad
+set.seed(80)
+
+# Ejecutamos el entrenamiento
+results_equipo_dico <- caret::train(Y ~ .,
+                data = Train.rf_equipo_dico, 
+                method = "ranger",
+                tuneGrid = hiperparametros,
+                metric = "Accuracy",
+                importance = "impurity",
+                trControl = cross_val_ranger,
+                num.trees = n_trees)
+               #allowParallel=FALSE)
+
+# Vector para probar diferentes números de árboles
+#num_trees_range <- c(10, 50, 100, 200, 500, 1000, 1500)
+results_equipo_dico
+```
+
+```{r}
+# Definir los valores de num.trees a probar
+num_trees_range <- c(10, 50, 100, 200, 500, 1000, 1500)
+
+# Lista para almacenar los modelos
+modelos_equipo_dico <- list()
+
+# Establecer semilla para reproducibilidad
+set.seed(80)
+
+# Iterar sobre cada cantidad de árboles
+for (nt in num_trees_range) {
+  cat("Entrenando modelo con", nt, "árboles...\n")
+  
+  modelos_equipo_dico[[as.character(nt)]] <- caret::train(
+    Y ~ .,
+    data = Train.rf_equipo_dico,
+    method = "ranger",
+    tuneGrid = hiperparametros,
+    metric = "Accuracy",
+    importance = "impurity",
+    trControl = cross_val_ranger,
+    num.trees = nt
+  )
+}
+
+```
+
+
+```{r}
+  resultados_modelos <- data.frame(
+  num_trees = num_trees_range,
+  Accuracy = sapply(modelos_equipo_dico, function(m) max(m$results$Accuracy, na.rm = TRUE)),
+  Kappa = sapply(modelos_equipo_dico, function(m) max(m$results$Kappa, na.rm = TRUE)),
+  mtry = sapply(modelos_equipo_dico, function(m) m$bestTune$mtry),
+  min.node.size = sapply(modelos_equipo_dico, function(m) m$bestTune$min.node.size)
+)
+
+# Ordenamos los modelos de mejor a peor Accuracy
+resultados_modelos <- resultados_modelos[order(-resultados_modelos$Accuracy), ]
+
+print(head(resultados_modelos, 20)) 
+
+```
+
+
+```{r}
+# Encontrar el índice del modelo con mejor Accuracy en la tabla de resultados
+mejor_idx <- which.max(resultados_modelos$Accuracy)
+
+# Extraer la mejor combinación de hiperparámetros
+mejor_num_trees <- resultados_modelos$num_trees[mejor_idx]
+mejor_mtry <- resultados_modelos$mtry[mejor_idx]
+mejor_min_node_size <- resultados_modelos$min.node.size[mejor_idx]
+
+# Extraer el modelo correspondiente en la lista
+mejor_modelo <- modelos_equipo_dico[[as.character(mejor_num_trees)]]
+
+# Mostrar los hiperparámetros seleccionados
+cat("Mejor modelo seleccionado:\n")
+cat("Número de árboles:", mejor_num_trees, "\n")
+cat("mtry:", mejor_mtry, "\n")
+cat("min.node.size:", mejor_min_node_size, "\n")
+
+# Mostrar detalles del mejor modelo
+print(mejor_modelo)
+
+```
+
+
+```{r}
+
+rf_cv<-function(df_train, model, grid, metrica, title, num.trees){
+
+ranger_equipo_dico <- caret::train(
+  Y ~ .,
+  data = df_train,
+  method = "ranger",
+  tuneGrid = hiperparametros,
+  metric = "Accuracy",
+  importance = "impurity",
+  trControl = cross_val_ranger,  # Si querés usar validación cruzada
+  num.trees=num.trees  # Número de árboles fijo
+)
+
+return(ranger_equipo_dico)
+}
+
+#
+
+ranger_equipo_dico<-rf_cv(Train.rf_equipo_dico,"ranger",hiperparametros,"Accuracy", num.trees=mejor_num_trees)
+```
+
+
+```{r}
+Test.rf_equipo_dico$Y<-as.factor(Test.rf_equipo_dico$Y)
+str(Test.rf_equipo_dico$Y)
+```
+
+```{r}
+testRF_NOID_equipo_dico <- Test.rf_equipo_dico[, -which(names(Test.rf_equipo_dico) == "Y")]
+
+```
+
+
+
+```{r}
+#prediccionesRF1<-predict(resultadosRF, newdata = dataNOID_test)
+predRANGER_equipo_dico<-predict(ranger_equipo_dico, newdata = testRF_NOID_equipo_dico)#matriz binarizada
+print(predRANGER_equipo_dico)
+
+
+# Obtener las etiquetas reales del conjunto de datos de prueba
+#y_test <- testData$Y
+predRANGER_equipo_dico <- factor(as.character(predRANGER_equipo_dico), 
+                             levels = c("X1", "X2"),
+                             labels = c("1", "2"))
+predRANGER_equipo_dico <- factor(predRANGER_equipo_dico, levels = c("1", "2"), labels = c("Cov.Neg", "Cov.Pos"))
+
+prob_predRanger <- predict(results_equipo_dico, newdata = testRF_NOID_equipo_dico, type = "prob")
+
+colnames(prob_predRanger)
+# Asegúrate de que y_test sea un factor con los niveles correctos
+y_test <- factor(Test.rf_equipo_dico$Y, levels = c(1, 2), labels = c("Cov.Neg", "Cov.Pos"))
+
+
+
+
+```
+
+
+```{r}
+library(pROC)
+
+# Asegúrate de que y_test sea numérico y esté alineado con los niveles 1 y 2
+y_test_numeric <- as.numeric(y_test)
+
+roc_curve <- roc(response = y_test_numeric, 
+                 predictor = prob_predRanger[, "X2"], 
+                 levels = c(1, 2))
+AUC_Ranger_equipo_dich <- auc(roc_curve)
+print(paste("El valor de AUC es:", round(AUC_Ranger_equipo_dich, 3)))
+
+# Visualiza la curva ROC
+plot(roc_curve, main = "Curva ROC", col = "blue", lwd = 2)
+
+# confusion_matrixRANGER <- table(predRANGER_equipo_dico, y_test)
+# # Imprimir la matriz de confusión
+# print(confusion_matrixRANGER)
+RANGER_dico_metrics_equipo <- caret::confusionMatrix(predRANGER_equipo_dico, y_test, positive = "Cov.Pos")
+```
+
+```{r}
+# # Precisión (Accuracy)
+
+# 
+# # Sensibilidad (Recall o TPR)
+# sensitivity_RANGER_eq_dic <- confusion_matrixRANGER[2, 2] / sum(confusion_matrixRANGER[, 2])
+# print(paste("La sensibilidad es:", round(sensitivity_RANGER_eq_dic,2)))
+# 
+# # Especificidad (TNR)
+# specificity_RANGER_eq_dic <- confusion_matrixRANGER[1, 1] / sum(confusion_matrixRANGER[, 1])
+# print(paste("la especificidad es:", round(specificity_RANGER_eq_dic,2)))
+# 
+# # Valor Predictivo Positivo (PPV o Precision)
+# ppv_RANGER_eq_dic <- confusion_matrixRANGER[2, 2] / sum(confusion_matrixRANGER[2, ])
+# print(paste("el VPP es:", round(ppv_RANGER_eq_dic,2)))
+# 
+# # Valor Predictivo Negativo (VPN)
+# npv_RANGER_eq_dic <- confusion_matrixRANGER[1, 1] / sum(confusion_matrixRANGER[1, ])
+# print(paste("el VPN es: ",  round(npv_RANGER_eq_dic,2)))
+#
+
+accuracyRANGER_equipo_dico <- RANGER_dico_metrics_equipo$overall["Accuracy"]
+kappaRANGER_equipo_dico <- RANGER_dico_metrics_equipo$overall["Kappa"]
+# Métricas por clase
+sensitivityRANGER_equipo_dico <- RANGER_dico_metrics_equipo$byClass["Sensitivity"]
+specificityRANGER_equipo_dico <- RANGER_dico_metrics_equipo$byClass["Specificity"]
+precisionRANGER_equipo_dico <- RANGER_dico_metrics_equipo$byClass["Pos Pred Value"]
+recallRANGER_equipo_dico <- RANGER_dico_metrics_equipo$byClass["Sensitivity"]  # Igual a sensitivity
+f1_scoreRANGER_equipo_dico <- RANGER_dico_metrics_equipo$byClass["F1"]
+npvRANGER_equipo_dico <- RANGER_dico_metrics_equipo$byClass["Neg Pred Value"]
+prevalenceRANGER_equipo_dico <- RANGER_dico_metrics_equipo$byClass["Prevalence"]
+detection_rateRANGER_equipo_dico <- RANGER_dico_metrics_equipo$byClass["Detection Rate"]
+balanced_accuracyRANGER_equipo_dico <- RANGER_dico_metrics_equipo$byClass["Balanced Accuracy"]
+
+# Calcular LR+ y LR- que no vienen directamente en confusionMatrix
+LR_plusRANGER_equipo_dico <- sensitivityRANGER_equipo_dico / (1 - specificityRANGER_equipo_dico)
+LR_minusRANGER_equipo_dico <- (1 - sensitivityRANGER_equipo_dico) / specificityRANGER_equipo_dico
+
+# Para manejar valores especiales
+LR_plusRANGER_equipo_dico <- ifelse(is.nan(LR_plusRANGER_equipo_dico) | is.infinite(LR_plusRANGER_equipo_dico), NA, LR_plusRANGER_equipo_dico)
+LR_minusRANGER_equipo_dico <- ifelse(is.nan(LR_minusRANGER_equipo_dico) | is.infinite(LR_minusRANGER_equipo_dico), NA, LR_minusRANGER_equipo_dico)
+
+# Crear un dataframe con todas las métricas
+metrics_RANGER_dico_equipo <- data.frame(
+  Metric = c("Accuracy", "Kappa", "Sensitivity", "Specificity", "Precision", 
+             "F1_Score", "NPV", "Prevalence", "Detection_Rate", 
+             "Balanced_Accuracy", "LR+", "LR-", "AUC"),
+  RANGER_dico_equipo_tot = c(accuracyRANGER_equipo_dico, kappaRANGER_equipo_dico, sensitivityRANGER_equipo_dico, specificityRANGER_equipo_dico, precisionRANGER_equipo_dico, 
+            f1_scoreRANGER_equipo_dico, npvRANGER_equipo_dico, prevalenceRANGER_equipo_dico, detection_rateRANGER_equipo_dico, 
+            balanced_accuracyRANGER_equipo_dico, LR_plusRANGER_equipo_dico, LR_minusRANGER_equipo_dico, AUC_Ranger_equipo_dich))
+
+# Mostrar los resultados
+print(metrics_RANGER_dico_equipo)
+
+
+
+
+```
+
+
+```{r}
+
+# library(irr)
+# 
+# # Calcular Kappa
+# kappa_RANGEReq_dic <- kappa2(cbind(predRANGER_equipo_dico, Test.rf_equipo_dico$Y))
+# 
+# # Ver el valor de Kappa
+# print(paste("El índice Kappa es:", round(kappa_RANGEReq_dic$value, 3)))
+# kappa_RANGEReq_dic<-round(kappa_RANGEReq_dic$value, 3)
+```
+
+
+
+
+# COMPARACION MODELOS
+
+```{r}
+# resultados_modelos_equipo <- data.frame(
+#   Modelo = c("RF_equipodic", "GLMC_equipodic", "KNN_equipodic", "Ranger_equipodic",  "RF_equipo", "GLM_equipo", "KNN_equipo", "Ranger_equipo"),
+#   Accuracy = c(accuracyRF_equipo_dic, accuracy_GLM_equipo_dic , accuracy_KNN_equipo_dic, accuracy_RANGER_eq_dic, accuracy_RF_equipo, accuracy_GLM_equipo , accuracy_KNN_equipo, accuracy_RANGER_eq),
+#   Sensibilidad=c(sensitivityRF_equipo_dic, sensitivity_GLM_equipo_dic, sensitivity_KNN_equipo_dic, sensitivity_RANGER_eq_dic, sensitivity_RF_equipo, sensitivity_GLM_equipo, sensitivity_KNN_equipo, sensitivity_RANGER_eq),
+#   Especificidad = c(specificityRF_equipo_dic, specificity_GLM_equipo_dic, specificity_KNN_equipo_dic, specificity_RANGER_eq_dic, specificityRF_equipo, specificity_GLM_equipo, specificity_KNN_equipo, specificity_RANGER_eq),
+#   AUC= c(AUC_RF_equipo_dic, AUC_GLM_equipo_dic, AUC_KNN_equipo, AUC_Ranger_equipo_dich, AUC_RF_equipo, AUC_GLM_equipo, AUC_KNN_equipo, AUC_Ranger_equipo),
+# kappa= c(kappa_RFeq_dic, kappa_GLM_equipo, kappa_KNN_eq_dic, kappa_RANGEReq_dic, kappa_RFeq, kappa_GLM_equipo, kappa_KNNeq, kappa_RANGEReq))
+# 
+# 
+# print(resultados_modelos_equipo)
+
+```
+
+
+
+
+```{r}
+# 
+# 
+# # Cargar la librería
+# library(writexl)
+# 
+# # Exportar a Excel
+# write_xlsx(resultados_modelos_equipo, "C:/Users/karin/Desktop/MCD/TESIS/resultados_modelos_equipo_cv.xlsx")
+```

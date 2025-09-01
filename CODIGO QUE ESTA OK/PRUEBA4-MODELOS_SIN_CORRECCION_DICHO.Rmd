@@ -1,0 +1,481 @@
+---
+title: "4-MODELO_SIN_DICOTOMIZAR"
+author: "Karina Roitman"
+date: "2024-10-17"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+---
+title: "Untitled"
+author: "Karina Roitman"
+date: "2024-10-10"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+
+1.Modelos sin corrección de efecto batch
+====================================================
+
+```{r}
+library(MALDIquant)
+library(MALDIquantForeign)
+library(readBrukerFlexData)
+library(ggplot2)
+library(caret)
+library(stats)
+library(binda)
+library(factoextra)
+library(binda)
+library(dplyr)
+library(crossval)
+library(ggrepel)
+library(corrr)
+library(ggplot2)
+library(FactoMineR)
+```
+
+
+
+
+```{r}
+#Dicotimizacion de la matriz de intensidad
+ #optimizeThreshold uses (approximate) mutual information to determine the optimal thresholds. Specifically, the thresholds are chosen to maximize the mutual information between response and each variable
+thr <- optimizeThreshold(featureMatrix_num, Datos_actualizados$PCR.Cov)
+featureMatrix_dicho <- dichotomize(featureMatrix_num, thr) #2 MATRIZ DE INTENSIDAD DICOTOMIZADA
+```
+
+```{r}
+featureMatrix_dicho<- cbind(featureMatrix_dicho, label=Datos_actualizados$PCR.Cov)#1=neg,2=pos
+```
+
+
+```{r}
+featureMatrix_dicho<-as.data.frame(featureMatrix_dicho)
+featureMatrix_dicho$label<-as.factor(featureMatrix_dicho$label)
+str(featureMatrix_dicho)
+```
+
+
+```{r}
+library(dplyr)
+featureMatrix_dicho <- featureMatrix_dicho %>% rename(Y = label)
+str(featureMatrix_dicho)
+
+```
+
+```{r}
+# set.seed asegura reproducibilidad
+set.seed(42)
+
+# Crear partición usando la columna 18 (asegúrate de que esta columna es la de las etiquetas)
+trainIndex <- createDataPartition(featureMatrix_dicho[, 18], p = 0.8, list = FALSE)
+
+# Crear conjuntos de entrenamiento y prueba, asegurando que ambos son dataframes
+trainData <- as.data.frame(featureMatrix_dicho[trainIndex, , drop = FALSE])
+testData <- as.data.frame(featureMatrix_dicho[-trainIndex, , drop = FALSE])
+
+# Verificar los nombres de columnas (ajusta si la columna no se llama 'covid')
+colnames(trainData)
+
+# Verificar la proporción de clases (ajusta el nombre si no es 'covid')
+table(trainData$Y)
+table(testData$Y)
+
+```
+
+
+```{r}
+control1 <- trainControl(method = "cv", number = 5)
+#en esta primera vez pruebo con crossval
+```
+
+
+```{r}
+# Especificar la variable dependiente en la fórmula
+formula <- Y ~ .
+```
+
+
+```{r}
+#accuracy=Es la proporción de predicciones correctas realizadas por el modelo con respecto al total de predicciones.
+
+#kappa= Es una métrica que mide el grado de acuerdo entre las predicciones del modelo y las clases verdaderas, ajustando por la posibilidad de que el acuerdo se deba al azar.
+```
+
+
+#19.1 Random forest
+
+```{r}
+library(caret)
+control1 <- trainControl(method = "cv", number = 10)
+grid_rf <- expand.grid(mtry = c(2, 5, 10)) #the randomForest package only has one available tuning parameter, mtry.
+
+RF_model <- train(Y ~ ., data = trainData, 
+                      method = "rf",   # Método para random forest
+                      trControl = control1, 
+                      tuneGrid = grid_rf,  # Parámetro mtry
+                      metric = "Accuracy")  # Métrica para clasificación
+
+```
+
+```{r}
+RF_model
+```
+
+```{r}
+plot(RF_model)
+```
+
+
+#19.2 GBM
+
+```{r}
+# grid_gbm <- expand.grid(
+#   interaction.depth = c(1, 3, 5, 7, 9, 11), 
+#   n.trees = (1:10) * 100, 
+#   shrinkage = c(0.01, 0.05, 0.1, 0.2),
+#   n.minobsinnode = c(5, 10, 15, 20, 25)
+# )
+
+# 
+# GBM_model<-train(Y ~ ., data = trainData, 
+#                       method = "gbm",   # Método para random forest
+#                       trControl = control1, 
+#                       tuneGrid = grid_gbm, 
+#                       metric = "Accuracy")
+
+
+GBM_model <- train(
+  Y ~ .,                        # Reemplaza Y con tu variable dependiente
+  data = trainData,            # Tu conjunto de entrenamiento
+  method = "gbm",              # Método GBM
+  trControl = control1,         # Control de entrenamiento
+  tuneGrid = expand.grid(
+    interaction.depth = 3,     # Profundidad máxima de los árboles
+    n.trees = 100,             # Número de árboles
+    shrinkage = 0.1,           # Tasa de aprendizaje
+    n.minobsinnode = 10        # Mínimo de observaciones en cada nodo
+  ),
+  metric = "Accuracy",         # Métrica de rendimiento
+  verbose = TRUE               # Mostrar progreso
+)
+GBM_model
+
+```
+
+
+
+```{r}
+# trellis.par.set(caretTheme())
+# plot(GBM_model)
+# 
+# trellis.par.set(caretTheme())
+# plot(GBM_model, metric = "Kappa")
+```
+
+#19.3 SVM
+
+
+```{r}
+SVM_model <- train(Y ~., data = trainData, method = "svmRadial", trControl = control1, preProcess = c("center","scale"), tuneLength = 10)
+# Print the best tuning parameter sigma and C that maximizes model accuracy
+SVM_model$bestTun    #there is a tuning parameter C, also known as Cost, that determines the possible misclassifications. It essentially imposes a penalty to the model for making an error: the higher the value of C, the less likely it is that the SVM algorithm will misclassify a point.
+#sigma: es propio del tipo de kernel que estamos utilizando y en el fondo va a regular el overfitting del modelo
+
+SVM_model
+#grid search SVM
+
+# tune_grid <- expand.grid(
+#   C = 2^(-5:5),      # Rango de valores de C: 0.03125, 0.0625, ..., 32
+#   sigma = c(0.01, 0.1, 0.5, 1)  # Rango de valores de sigma
+# )
+# 
+# # Ajustar el modelo SVM con tuning de hiperparámetros
+# SVM_model <- train(
+#   Y ~ ., 
+#   data = trainData, 
+#   method = "svmRadial", 
+#   trControl = control1, 
+#   preProcess = c("center", "scale"), 
+#   tuneGrid = tune_grid,  # Usar el grid de hiperparámetros
+#   metric = "Accuracy"     # Métrica para evaluación
+# )
+```
+
+```{r}
+plot(SVM_model)
+```
+
+
+#19.3 KNN
+
+
+```{r}
+tuneGrid <- expand.grid(k = 1:15)
+
+# Ajustar el modelo KNN
+KNN_modelo <- train(formula, 
+                    data = trainData, 
+                    trControl = control1, 
+                    method = "knn", 
+                    metric = "Accuracy", 
+                    preProcess = c("center","scale"),
+                    tuneGrid = tuneGrid)
+
+KNN_modelo
+```
+```{r}
+plot(KNN_modelo)
+```
+
+#19.4 GLMNET
+
+```{r}
+
+tuneGrid <- expand.grid(
+  alpha = seq(0, 1, by = 0.1),  # From 0 (Ridge) to 1 (Lasso)
+  lambda = 10^seq(-3, 3, length = 100)  # Logarithmic scale for lambda
+)
+
+GLM_model <- train(formula, 
+                  data = trainData,  
+                   method = "glmnet",
+                   metric = "Accuracy",
+                   tuneLength = 3,
+                   trControl = control1,tuneGrid=tuneGrid)
+
+GLM_model 
+```
+
+
+```{r}
+# Imprimir los mejores hiperparámetros
+best_params <- GLM_model$bestTune
+print("Best Hyperparameters:")
+print(best_params)
+
+# Extraer accuracy y kappa del mejor modelo
+# Buscamos la fila que corresponde a los mejores hiperparámetros en el data frame model$results
+best_model_index <- apply(GLM_model$results, 1, function(row) {
+  all(row[1:length(best_params)] == as.numeric(best_params))
+})
+
+best_model_results <- GLM_model$results[best_model_index, ]
+
+# Imprimir accuracy y kappa del mejor modelo
+accuracy <- best_model_results$Accuracy
+kappa <- best_model_results$Kappa
+
+print("Accuracy of the Best Model:")
+print(accuracy)
+
+print("Kappa of the Best Model:")
+print(kappa)
+
+```
+
+20. Prediccion
+==========================================================
+
+```{r}
+testData$Y<-as.factor(testData$Y)
+str(testData$Y)
+```
+```{r}
+testData_NOID <- testData[, -which(names(testData) == "Y")]
+
+```
+
+#20.1 RF
+
+```{r}
+#prediccionesRF1<-predict(resultadosRF, newdata = dataNOID_test)
+prediccionesRF<-predict(RF_model, newdata = testData_NOID)#matriz binarizada
+print(prediccionesRF)
+
+
+# Obtener las etiquetas reales del conjunto de datos de prueba
+y_test <- testData$Y
+#y_testDIC <- FeatureMatrix_Dic_df$Y#Matriz binarizada
+
+```
+
+```{r}
+confusion_matrixRF <- table(prediccionesRF, y_test)
+# Imprimir la matriz de confusión
+print(confusion_matrixRF)
+
+```
+
+```{r}
+#metricas
+# Precisión
+accuracy_RF <- sum(diag(confusion_matrixRF)) / sum(confusion_matrixRF)
+print(accuracy_RF)
+# Precisión positiva (VP) o sensibilidad
+sensitivity_RF <- confusion_matrixRF[2, 2] / sum(confusion_matrixRF[2, ])
+print(sensitivity_RF)
+# Precisión negativa (VN) o especificidad
+specificity_RF <- confusion_matrixRF[1, 1] / sum(confusion_matrixRF[1, ])
+specificity_RF
+
+# Valor predictivo positivo (VPP)
+ppv_RF <- confusion_matrixRF[2, 2] / sum(confusion_matrixRF[, 2])
+print(ppv_RF)
+# Valor predictivo negativo (VPN)
+npv_RF <- confusion_matrixRF[1, 1] / sum(confusion_matrixRF)
+print(npv_RF)
+```
+
+
+#20.2 Prediccion GBM
+ 
+```{r}
+#prediccionesRF1<-predict(resultadosRF, newdata = dataNOID_test)
+prediccionesGBM<-predict(GBM_model, newdata = testData_NOID)#matriz binarizada
+print(prediccionesGBM)
+
+
+# Obtener las etiquetas reales del conjunto de datos de prueba
+y_test <- testData$Y
+#y_testDIC <- FeatureMatrix_Dic_df$Y#Matriz binarizada
+
+```
+
+```{r}
+confusion_matrixGBM <- table(prediccionesGBM, y_test)
+# Imprimir la matriz de confusión
+print(confusion_matrixGBM)
+
+```
+
+```{r}
+#metricas
+# Precisión
+accuracy_GBM <- sum(diag(confusion_matrixGBM)) / sum(confusion_matrixGBM)
+print(accuracy_GBM)
+# Precisión positiva (VP) o sensibilidad
+sensitivity_GBM <- confusion_matrixGBM[2, 2] / sum(confusion_matrixGBM[2, ])
+print(sensitivity_GBM)
+# Precisión negativa (VN) o especificidad
+specificity_GBM <- confusion_matrixGBM[1, 1] / sum(confusion_matrixGBM[1, ])
+specificity_GBM
+
+# Valor predictivo positivo (VPP)
+ppv_GBM <- confusion_matrixGBM[2, 2] / sum(confusion_matrixGBM[, 2])
+print(ppv_GBM)
+# Valor predictivo negativo (VPN)
+npv_GBM <- confusion_matrixGBM[1, 1] / sum(confusion_matrixGBM[, 1])
+print(npv_GBM)
+```
+
+
+
+#20.3 Prediccion SVM
+
+```{r}
+#prediccionesRF1<-predict(resultadosRF, newdata = dataNOID_test)
+prediccionesSVM<-predict(SVM_model, newdata = testData_NOID)#matriz binarizada
+print(prediccionesSVM)
+
+
+# Obtener las etiquetas reales del conjunto de datos de prueba
+y_test <- testData$Y
+#y_testDIC <- FeatureMatrix_Dic_df$Y#Matriz binarizada
+
+```
+
+```{r}
+confusion_matrixSVM <- table(prediccionesSVM, y_test)
+# Imprimir la matriz de confusión
+print(confusion_matrixSVM)
+
+```
+```{r}
+#metricas
+# Precisión
+accuracy_SVM <- sum(diag(confusion_matrixSVM)) / sum(confusion_matrixSVM)
+print(accuracy_SVM)
+# Precisión positiva (VP) o sensibilidad
+sensitivity_SVM <- confusion_matrixSVM[2, 2] / sum(confusion_matrixSVM[2, ])
+print(sensitivity_SVM)
+# Precisión negativa (VN) o especificidad
+specificity_SVM <- confusion_matrixSVM[1, 1] / sum(confusion_matrixSVM[1, ])
+specificity_SVM
+
+# Valor predictivo positivo (VPP)
+ppv_SVM <- confusion_matrixSVM[2, 2] / sum(confusion_matrixSVM[, 2])
+print(ppv_SVM)
+# Valor predictivo negativo (VPN)
+npv_SVM <- confusion_matrixSVM[1, 1] / sum(confusion_matrixSVM[, 1])
+print(npv_SVM)
+```
+
+
+
+
+
+#20.4 Prediccion KNN
+
+```{r}
+#prediccionesRF1<-predict(resultadosRF, newdata = dataNOID_test)
+prediccionesKNN<-predict(KNN_modelo, newdata = testData_NOID)#matriz binarizada
+print(prediccionesKNN)
+
+
+# Obtener las etiquetas reales del conjunto de datos de prueba
+y_test <- testData$Y
+#y_testDIC <- FeatureMatrix_Dic_df$Y#Matriz binarizada
+
+```
+
+
+```{r}
+confusion_matrixKNN <- table(prediccionesKNN, y_test)
+# Imprimir la matriz de confusión
+print(confusion_matrixKNN)
+
+```
+
+```{r}
+#metricas
+# Precisión
+accuracy_KNN <- sum(diag(confusion_matrixKNN)) / sum(confusion_matrixKNN)
+print(accuracy_KNN)
+# Precisión positiva (VP) o sensibilidad
+sensitivity_KNN <- confusion_matrixKNN[2, 2] / sum(confusion_matrixKNN[2, ])
+print(sensitivity_KNN)
+# Precisión negativa (VN) o especificidad
+specificity_KNN <- confusion_matrixKNN[1, 1] / sum(confusion_matrixKNN[1, ])
+specificity_KNN
+
+# Valor predictivo positivo (VPP)
+ppv_KNN <- confusion_matrixKNN[2, 2] / sum(confusion_matrixKNN[, 2])
+print(ppv_KNN)
+# Valor predictivo negativo (VPN)
+npv_KNN <- confusion_matrixKNN[1, 1] / sum(confusion_matrixKNN[, 1])
+print(npv_KNN)
+```
+#20: COMPARACION MODELOS
+
+```{r}
+resultados_modelos <- data.frame(
+  Modelo = c("RF_model", "GBM_model", "SVM_model", "KNN_model"),
+  Accuracy = c(accuracy_RF, accuracy_GBM, accuracy_SVM, accuracy_KNN),
+  Sensibilidad=c(sensitivity_RF, sensitivity_GBM, sensitivity_SVM, sensitivity_KNN),
+  Especificidad = c(specificity_RF, specificity_GBM, specificity_SVM, specificity_KNN)
+)
+
+# Imprimir la tabla
+print(resultados_modelos)
+```
+

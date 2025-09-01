@@ -1,0 +1,333 @@
+---
+title: "Untitled"
+author: "Karina Roitman"
+date: "2025-05-24"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(rmarkdown)
+```
+
+```{r}
+
+library(stringr)
+?stringr
+library(tidyr)
+?tidyr
+library(dplyr)
+library(openxlsx)
+library(purrr)
+library(broom)
+library(ggplot2)
+library(MALDIquant)
+?MALDIquant
+library(MALDIquantForeign)
+?MALDIquantForeign
+```
+
+
+```{r}
+setwd("C:/Users/karin/Desktop/MCD/TESIS")
+```
+
+# 2. Cargar datos
+
+```{r}
+load("./Data_Kari/ciego/Average_ciego.Costa.Rica.4.rda")
+load("./Data_Kari/ciego/Average_ciego.Costa.Rica.5.rda")
+load("./Data_Kari/ciego/Average_ciego.Costa.Rica.6.rda")
+load("./Data_Kari/ciego/Average_ciego.Malbran.4.rda")
+```
+
+
+
+```{r}
+library(purrr)
+```
+
+CR4
+
+```{r}
+# Listado de tus dataframes
+dataframes <- list(CostaRica.4.1.1)
+
+# Usas lapply para agregar las columnas a cada dataframe
+dataframes <- lapply(dataframes, function(df) {
+  df$institucion <- "CR"
+  df$equipo <- "CR"
+  return(df)
+})
+
+# Asignas los dataframes modificados de vuelta a sus nombres originales
+
+CostaRica.4.1.1 <- dataframes[[1]]
+```
+
+
+
+```{r}
+CostaRica.4.1.1<-CostaRica.4.1.1[,c(1,5,9)]
+CostaRica.4.1.1<-data.frame(purrr::map(CostaRica.4.1.1, as.character ),
+                               stringsAsFactors = FALSE)
+```
+
+```{r}
+
+library(dplyr)
+
+CostaRica.4.1.1 <- CostaRica.4.1.1 %>% rename(PCR.Cov = Virus)
+#CostaRica.4.1.1 <- CostaRica.4.1.1 %>% rename(fecha = protocolo)
+library(dplyr)
+
+#CostaRica.4.1.1 <- CostaRica.4.1.1 %>% dplyr::select(spot.a.1, Carga, PCR.Cov, fecha, institucion, equipo)
+print(CostaRica.4.1.1)
+```
+
+
+CR5
+
+
+```{r}
+# Listado de tus dataframes
+dataframes <- list(CostaRica.5.1)
+
+# Usas lapply para agregar las columnas a cada dataframe
+dataframes <- lapply(dataframes, function(df) {
+  df$institucion <- "CR"
+  df$equipo <- "CR"
+  return(df)
+})
+
+# Asignas los dataframes modificados de vuelta a sus nombres originales
+
+CostaRica.5.1 <- dataframes[[1]]
+```
+
+
+
+```{r}
+CostaRica.5.1<-CostaRica.5.1[,c(1,5,9)]
+CostaRica.5.1<-data.frame(purrr::map(CostaRica.5.1, as.character ),
+                               stringsAsFactors = FALSE)
+```
+
+```{r}
+
+library(dplyr)
+
+CostaRica.5.1 <- CostaRica.5.1 %>% rename(PCR.Cov = Virus)
+#CostaRica.5.1 <- CostaRica.5.1 %>% rename(fecha = protocolo)
+library(dplyr)
+
+#CostaRica.5.1 <- CostaRica.5.1 %>% dplyr::select(spot.a.1, Carga, PCR.Cov, fecha, institucion, equipo)
+print(CostaRica.5.1)
+```
+
+
+
+CR6
+
+
+```{r}
+# Listado de tus dataframes
+dataframes <- list(CostaRica.6.1)
+
+# Usas lapply para agregar las columnas a cada dataframe
+dataframes <- lapply(dataframes, function(df) {
+  df$institucion <- "CR"
+  df$equipo <- "CR"
+  return(df)
+})
+
+# Asignas los dataframes modificados de vuelta a sus nombres originales
+
+CostaRica.6.1 <- dataframes[[1]]
+```
+
+
+```{r}
+CostaRica.6.1<-CostaRica.6.1[,c(1,5,9)]
+CostaRica.6.1<-data.frame(purrr::map(CostaRica.6.1, as.character ),
+                               stringsAsFactors = FALSE)
+```
+
+```{r}
+
+library(dplyr)
+
+CostaRica.6.1 <- CostaRica.6.1 %>% rename(PCR.Cov = Virus)
+#CostaRica.6.1 <- CostaRica.6.1 %>% rename(fecha = protocolo)
+library(dplyr)
+
+#CostaRica.6.1 <- CostaRica.6.1 %>% dplyr::select(spot.a.1, Carga, PCR.Cov, fecha, institucion, equipo)
+print(CostaRica.6.1)
+```
+
+
+MALBRAN 4
+
+```{r}
+# Listado de tus dataframes
+dataframes <- list(Malbran_5_6.1)
+
+# Usas lapply para agregar las columnas a cada dataframe
+dataframes <- lapply(dataframes, function(df) {
+  df$institucion <- "Malbran"
+  df$equipo <- "Malbran"
+  return(df)
+})
+
+# Asignas los dataframes modificados de vuelta a sus nombres originales
+
+Malbran_5_6.1 <- dataframes[[1]]
+```
+
+
+
+```{r}
+Malbran_5_6.1<-Malbran_5_6.1[,c(1,7,9)]
+Malbran_5_6.1<-data.frame(purrr::map(Malbran_5_6.1, as.character ),
+                               stringsAsFactors = FALSE)
+print(Malbran_5_6.1)
+```
+
+
+
+```{r}
+Data_ciegos<-CostaRica.4.1.1 %>%
+  bind_rows(CostaRica.5.1) %>%
+  bind_rows(CostaRica.6.1) %>%
+  bind_rows(Malbran_5_6.1)
+```
+
+
+
+
+```{r}
+library(MALDIquant)
+
+mz_list <- lapply(peaks, mz)
+# Extraer los m/z de cada muestra del entrenamiento
+
+# Unificar todos los m/z y sacar duplicados
+mz_entrenamiento <- sort(unique(unlist(mz_list)))
+
+```
+
+
+-------------------------------------------------------------
+
+
+```{r}
+# Espectra.c4_spot <- data.frame(names(Espectros.CR4),
+#                                   stringsAsFactors = FALSE)
+# 
+# Datos_actualizados_C4<-  Espectra.c4_spot %>%
+#   left_join( Base.Union.Clinc.Covid, by="spot.a.1")
+```
+
+
+```{r}
+procesar_espectros_ciegos <- function(espectros_ciegos, mz_entrenamiento, 
+                                       SNR = 3, halfWindowSize = 50, 
+                                       bin_tolerance = 0.5, match_tolerance = 20) {
+  library(MALDIquant)
+  
+  # Paso 1: detectar picos
+  peaks_ciegos <- detectPeaks(espectros_ciegos, SNR = SNR, method = "MAD", halfWindowSize = halfWindowSize)
+  
+  # Paso 2: agrupar picos similares
+  peaks_ciegos <- binPeaks(peaks_ciegos, tolerance = bin_tolerance)
+  
+  # Paso 3: crear feature matrix comparando con los mz del entrenamiento
+  featureMatrix <- crear_feature_matrix_con_tolerancia(
+    peaks_list = peaks_ciegos,
+    mz_referencia = mz_entrenamiento,
+    tolerance = match_tolerance
+  )
+  
+  return(featureMatrix)
+}
+
+```
+
+
+```{r}
+crear_feature_matrix_con_tolerancia <- function(peaks_list, mz_referencia, tolerance = 20) {
+  mat <- matrix(0, nrow = length(peaks_list), ncol = length(mz_referencia))
+  colnames(mat) <- mz_referencia
+  
+  for (i in seq_along(peaks_list)) {
+    mz_i <- mz(peaks_list[[i]])
+    int_i <- intensity(peaks_list[[i]])
+    
+    for (j in seq_along(mz_referencia)) {
+      idx <- which(abs(mz_i - mz_referencia[j]) <= tolerance)
+      if (length(idx) > 0) {
+        mejor_idx <- idx[which.max(int_i[idx])]
+        mat[i, j] <- int_i[mejor_idx]
+      }
+    }
+  }
+  
+  return(as.data.frame(mat))
+}
+
+```
+
+
+```{r}
+lista_ciegos <- list(
+  CR4 = Espectros.CR4,
+  CR5 = Espectros.CR5,
+  CR6 = Espectros.CR6,
+  Malbran5.6=Espectros.Malb.5_6
+)
+
+# m/z del entrenamiento
+mz_list <- lapply(peaks, mz)
+mz_entrenamiento <- sort(unique(unlist(mz_list)))
+
+# Aplicar a todos los datasets ciegos
+feature_matrices <- lapply(lista_ciegos, function(espectros) {
+  procesar_espectros_ciegos(espectros, mz_entrenamiento)
+})
+
+
+feature_matrices$CR4  # matriz para Espectros.CR4
+feature_matrices$CR5 
+feature_matrices$CR5  # matriz para Espectros.CR4
+feature_matrices$Malbran5.6
+
+
+
+# Volver a unir
+featureMatrix_ciegos_total <- do.call(rbind, feature_matrices)
+
+#featureMatrix_ciegos_total <- apply(featureMatrix_ciegos_total, c(1, 2), function(x) signif(x, digits = 3))
+```
+
+
+```{r}
+sapply(featureMatrix_ciegos_total, class)
+
+```
+
+
+
+```{r}
+featureMatrix_ciegos_total<- cbind(featureMatrix_ciegos_total, covid=Data_ciegos$PCR.Cov)
+
+length(featureMatrix_ciegos_total)
+```
+```{r}
+#featureMatrix_ciegos_total<-featureMatrix_ciegos_total[,c(1:63,65)]
+featureMatrix_ciegos_total<-featureMatrix_ciegos_total %>% rename(Y=covid)
+featureMatrix_ciegos_total$Y<-as.factor(featureMatrix_ciegos_total$Y)
+```
+

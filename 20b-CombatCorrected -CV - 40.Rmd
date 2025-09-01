@@ -1,0 +1,1319 @@
+---
+title: "COMBAT_CORRECTED"
+author: "Karina Roitman"
+date: "2024-12-22"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(MALDIquant)
+library(MALDIquantForeign)
+library(readBrukerFlexData)
+library(ggplot2)
+library(caret)
+library(stats)
+library(binda)
+library(factoextra)
+library(binda)
+library(dplyr)
+library(crossval)
+library(ggrepel)
+library(corrr)
+library(ggplot2)
+library(FactoMineR)
+```
+
+
+
+# Modelos (con datos combat_corrected POR EQUIPO dicotomizado)
+
+
+```{r}
+# combat_corrected_equipo_tot<- cbind(combat_corrected_equipo_tot, Y=Datos_actualizados$PCR.Cov)#1=neg,2=pos
+# combat_corrected_equipo_tot<-as.data.frame(combat_corrected_equipo_tot)
+# combat_corrected_equipo_tot$Y <- as.factor(combat_corrected_equipo_tot$Y)
+```
+
+
+
+
+```{r}
+# combat_corrected_equipo_tot_dic<-combat_corrected_equipo_tot[1:542,]
+#combat_corrected_equipo_tot<-combat_corrected_equipo_tot[-ncol(combat_corrected_equipo_tot)]
+# ciego_combat_corrected_equipo_tot_dic<-combat_corrected_equipo_tot[543:694,]
+```
+```{r}
+#combat_corrected_equipo_tot<-combat_corrected_equipo_tot[-ncol(combat_corrected_equipo_tot)]
+```
+
+
+
+```{r}
+
+library(tidymodels)
+# set.seed asegura reproducibilidad
+set.seed(42)
+
+#Utilizo tidymodels para dividir de manera proporcional
+
+split_data <- initial_split(combat_corrected_equipo_tot, strata = "Y", prop = 0.8)
+
+# Obtener los conjuntos de entrenamiento y prueba
+trainData_equipo_dico <- training(split_data)
+testData_equipo_dico <- testing(split_data)
+
+```
+
+
+```{r}
+trainData_equipo_dico<-as.data.frame(trainData_equipo_dico)
+
+str(trainData_equipo_dico)
+```
+
+
+```{r}
+trainData_equipo_dico<-trainData_equipo_dico[,-ncol(trainData_equipo_dico)]
+train_subset<-trainData_equipo_dico[,-ncol(trainData_equipo_dico)]
+```
+
+
+```{r}
+res <- umbral_estabilidad(
+
+  df_train = df_train,
+
+  y_col = y_col,
+
+  n_splits = n_splits,
+
+  prop_train_interno = prop_train_interno,
+
+  semillas = semillas,
+
+  CV_filter = CV_filter,
+
+  optim_fun = optim_fun
+
+)
+
+ 
+
+  # Asegurar Y como factor binario (niveles ordenados)
+
+  y <- df_train[[y_col]]
+
+  if (!is.factor(y)) y <- factor(y)
+
+  if (length(levels(y)) != 2) stop("Y debe tener exactamente 2 niveles.")
+
+ 
+
+  # Matriz de predictores (todas menos Y)
+
+  X <- df_train[, setdiff(colnames(df_train), y_col), drop = FALSE]
+
+ 
+
+  # # Chequeos rápidos
+
+  # stopifnot(nrow(X) == length(y))
+
+  # if (!all(vapply(X, is.numeric, logical(1)))) {
+
+  #   stop("Todos los predictores deben ser numéricos para optimizeThreshold.")
+
+  # }
+
+ 
+
+  # Contenedor para umbrales por split
+
+  thresholds_list <- vector("list", n_splits)
+
+  split_indices    <- vector("list", n_splits)  # opcional: para auditoría
+
+ 
+
+  for (i in seq_len(n_splits)) {
+
+    set.seed(semillas[i])
+
+   
+
+    # Split estratificado dentro del train (indices de TRAIN interno)
+
+    idx_train_int <- caret::createDataPartition(y, p = prop_train_interno, list = FALSE)
+
+   
+
+    X_tr <- X[idx_train_int, , drop = FALSE]
+
+    y_tr <- y[idx_train_int]
+
+   
+
+    # Guardar índices para trazabilidad
+
+    split_indices[[i]] <- list(train_idx = idx_train_int,
+
+                               test_idx  = setdiff(seq_len(nrow(X)), idx_train_int))
+
+   
+
+    # Calcular umbrales SOLO con train interno
+
+    thr_i <- optim_fun(X_tr, y_tr)  # Debe devolver un vector con nombres de columnas de X_tr
+
+   
+
+    # Asegurar nombres completos y misma longitud (por si la función devuelve en desorden)
+
+    if (is.null(names(thr_i))) {
+
+      stop("optimizeThreshold debe retornar un vector con nombres de picos.")
+
+    }
+
+    # Reordenar al orden de X
+
+    thr_full <- rep(NA_real_, ncol(X))
+
+    names(thr_full) <- colnames(X)
+
+    thr_full[names(thr_i)] <- thr_i
+
+   
+
+    thresholds_list[[i]] <- thr_full
+
+  }
+
+ 
+
+  # Data frame de umbrales: filas = split, columnas = picos
+
+  thresholds_df <- do.call(rbind, thresholds_list)
+
+  rownames(thresholds_df) <- paste0("split_", seq_len(n_splits))
+
+ 
+
+  # CV por pico
+
+  cv_thresholds <- apply(thresholds_df, 2, function(x) {
+
+    m <- mean(x, na.rm = TRUE)
+
+    s <- sd(x,   na.rm = TRUE)
+
+    if (isTRUE(all(is.na(x)))) return(NA_real_)
+
+    if (isTRUE(is.na(m)) || m == 0) return(Inf) else return((s / m) * 100)
+
+  })
+
+ 
+
+  # Clasificación de estabilidad
+
+  picos_estables   <- names(cv_thresholds)[!is.na(cv_thresholds) & cv_thresholds < CV_filter]
+
+  picos_inestables <- names(cv_thresholds)[is.na(cv_thresholds) | cv_thresholds >= CV_filter]
+
+ 
+
+  # Umbral promedio SOLO para los picos estables (opcional)
+
+  thr_mean_estables <- if (length(picos_estables)) {
+
+    colMeans(thresholds_df[, picos_estables, drop = FALSE], na.rm = TRUE)
+
+  } else {
+
+    numeric(0)
+
+  }
+
+ 
+
+  list(
+
+    thresholds_df       = thresholds_df,        # umbrales por split
+
+    cv_thresholds       = cv_thresholds,        # CV por pico
+
+    picos_estables      = picos_estables,       # nombres de picos estables
+
+    picos_inestables    = picos_inestables,     # nombres de picos inestables
+
+    thr_mean_estables   = thr_mean_estables,    # umbral promedio por pico estable
+
+    split_indices       = split_indices         # auditoría (opcional)
+
+  )
+
+ 
+
+# df_train debe incluir la columna Y y SOLO predictores numéricos en el resto
+
+ 
+
+cfg <- list(
+
+  n_splits = 10,
+
+  prop_train_interno = 0.7,
+
+  semillas = 1001:1010,
+
+  CV_filter = 40,
+
+  optim_fun = optimizeThreshold
+
+)
+
+res <- do.call(umbral_estabilidad, c(list(df_train = trainData_equipo_dico, y_col = "Y"), cfg))
+
+ 
+
+# Picos estables (CV < 40)
+
+res$picos_estables
+
+ 
+
+# Umbrales promedio para los picos estables
+
+res$thr_mean_estables
+
+ 
+
+# Si querés filtrar tu matriz a solo picos estables:
+
+train_subset_estable <- trainData_equipo_dico[, c(res$picos_estables, "Y")]
+
+ 
+
+summary(cv_thresholds)
+
+table(
+
+  estable = names(cv_thresholds) %in% picos_estables
+
+)
+```
+
+```{r}
+# Filtrar el df de thresholds para los picos estables
+thresholds_estables <- thresholds_df[, picos_estables, drop = FALSE]
+
+# Calcular la media por columna (pico)
+thr <- colMeans(thresholds_estables, na.rm = TRUE)
+
+# Mostrar
+print(thr)
+
+```
+
+
+
+```{r}
+
+# thr <- optimizeThreshold(train_subset, trainData_equipo_dico$Y)
+train_subset <- dichotomize(train_subset, thr) #2 MATRIZ DE INTENSIDAD DICOTOMIZADA
+class(train_subset)
+colnames(train_subset)
+
+train_subset <- as.data.frame(train_subset)
+colnames(train_subset) <- "14693.0318613713"  # O el nombre real del pico
+```
+
+
+```{r}
+trainData_equipo_dico<-as.data.frame(trainData_equipo_dico)
+trainData_equipo_dico<- cbind(train_subset, trainData_equipo_dico$Y)#1=neg,2=pos
+```
+
+
+
+```{r}
+str(trainData_equipo_dico)
+trainData_equipo_dico<-as.data.frame(trainData_equipo_dico)
+```
+
+
+
+
+
+```{r}
+# library(dplyr)
+# trainData_equipo_dico<-as.data.frame(trainData_equipo_dico)
+# trainData_equipo_dico <- trainData_equipo_dico %>% rename(Y = V64)
+# str(trainData_equipo_dico$Y)
+
+# OPCIÓN 1: Usando índice de última columna (MÁS SIMPLE)
+trainData_equipo_dico <- as.data.frame(trainData_equipo_dico)
+names(trainData_equipo_dico)[ncol(trainData_equipo_dico)] <- "Y"
+str(trainData_equipo_dico$Y)
+```
+
+
+```{r}
+trainData_equipo_dico<-as.data.frame(trainData_equipo_dico)
+trainData_equipo_dico$Y<-as.factor(trainData_equipo_dico$Y)
+str(trainData_equipo_dico)
+```
+
+
+
+```{r}
+zero_var_indices <- caret::nearZeroVar(trainData_equipo_dico[, -ncol(trainData_equipo_dico)])
+
+if (length(zero_var_indices) > 0) {
+    trainData_equipo_dico <- trainData_equipo_dico[, -zero_var_indices]
+}
+
+```
+
+
+
+
+
+```{r}
+testData_equipo_dico<-as.data.frame(testData_equipo_dico)
+testData_equipo_dico$Y<-as.factor(testData_equipo_dico$Y)
+#testData_equipo_dico<-testData_equipo_dico[,-ncol(testData_equipo_dico)]
+str(testData_equipo_dico)
+```
+
+
+
+```{r}
+# library(dplyr)
+# testData_equipo_dico <- testData_equipo_dico %>% rename(Y = label)
+# str(testData_equipo_dico$Y)
+```
+
+
+
+```{r}
+test_subset <- testData_equipo_dico[, -ncol(testData_equipo_dico)]
+
+```
+
+
+```{r}
+library(dplyr)
+
+str(testData_equipo_dico$Y)
+```
+
+
+
+
+```{r}
+test_subset <- test_subset[, colnames(train_subset)]
+#test_subset <-  test_subset[, colnames(trainData_equipo_dico)]
+nombre_pico <- names(thr)
+
+
+names(thr) <- colnames(test_subset)
+
+test_subset <- data.frame(setNames(list(test_subset), nombre_pico))
+
+
+#Dicotimizacion de la matriz de intensidad
+test_subset <- dichotomize(test_subset, thr) 
+length(thr) == ncol(test_subset)
+
+colnames(test_subset) <- names(thr)
+test_subset <- as.data.frame(test_subset)
+colnames(test_subset) <- "14693.0318613713"
+```
+
+
+```{r}
+testData_equipo_dico<- cbind(test_subset, testData_equipo_dico$Y)#1=neg,2=pos
+```
+
+```{r}
+library(dplyr)
+testData_equipo_dico<-as.data.frame(testData_equipo_dico)
+names(testData_equipo_dico)[ncol(testData_equipo_dico)] <- "Y"
+str(testData_equipo_dico$Y)
+
+```
+
+```{r}
+str(testData_equipo_dico)
+```
+
+
+
+
+```{r}
+testData_equipo_dico<-as.data.frame(testData_equipo_dico)
+testData_equipo_dico$Y<-as.factor(testData_equipo_dico$Y)
+str(testData_equipo_dico)
+```
+
+
+
+
+```{r}
+# Ver la distribución de clases en ambos conjuntos
+trainData_equipo_dico<-as.data.frame(trainData_equipo_dico)
+table(trainData_equipo_dico$Y)
+table(testData_equipo_dico$Y)
+
+```
+
+
+
+
+```{r}
+library(caret)
+#set.seed(42)
+#control1 <- trainControl(method = "cv", number = 5)
+#en esta primera vez pruebo con crossval
+```
+
+```{r}
+# Especificar la variable dependiente en la fórmula
+formula <- Y ~ .
+```
+
+
+
+
+```{r}
+class(trainData_equipo_dico)
+```
+
+
+```{r}
+trainData_equipo_dico$Y <- factor(trainData_equipo_dico$Y)  # Asegura que Y sea un factor
+levels(trainData_equipo_dico$Y) <- make.names(levels(trainData_equipo_dico$Y))  # Corrige los nombres
+```
+
+
+------------------------------------------------------------------------------------------------
+```{r}
+entrenar_modelo <- function(data, formula, metodo, tuneGrid, preProcess = NULL, cross_val, metric = "Accuracy") {
+  modelo <- caret::train(
+    formula,
+    data = data,
+    method = metodo,
+    tuneGrid = tuneGrid,
+    trControl = cross_val,
+    metric = metric,
+    preProcess = preProcess
+  )
+  
+  # Mostrar resultados
+  print(modelo)
+  plot(modelo)
+  
+  # Extraer mejor combinación de hiperparámetros
+  best_params <- modelo$bestTune
+  best_row <- apply(modelo$results, 1, function(row) {
+    all(row[1:length(best_params)] == as.numeric(best_params))
+  })
+  best_metrics <- modelo$results[best_row, c("Accuracy", "Kappa")]
+  
+  cat("\n>> Métricas del mejor modelo (", metodo, "):\n", sep = "")
+  print(best_params)
+  print(best_metrics)
+
+  return(modelo)
+}
+
+```
+
+
+
+```{r}
+# Asegurar que Y sea un factor con nombres válidos
+trainData_equipo_dico$Y <- factor(trainData_equipo_dico$Y)
+levels(trainData_equipo_dico$Y) <- make.names(levels(trainData_equipo_dico$Y))
+
+# Fórmula
+formula <- Y ~ .
+
+# RANDOM FOREST
+grid_rf <- expand.grid(mtry = c(1, 2, 3))
+rf_equipo_dic <- entrenar_modelo(
+  data = trainData_equipo_dico,
+  formula = formula,
+  metodo = "rf",
+  tuneGrid = grid_rf,
+  cross_val = cross_val_rf
+)
+
+plot(rf_equipo_dic)
+```
+
+
+```{r}
+
+# KNN
+grid_knn <- expand.grid(k = 1:15)
+KNN_equipo_dic <- entrenar_modelo(
+  data = trainData_equipo_dico,
+  formula = formula,
+  metodo = "knn",
+  tuneGrid = grid_knn,
+  preProcess = c("center", "scale"),
+  cross_val = cross_val_knn
+)
+
+plot(KNN_equipo_dic)
+
+```
+
+
+
+
+
+
+------------------------------------------------------------------------------------------------
+#  Predicciones combat por equipo dicotomizado
+
+```{r}
+testData_equipo_dico$Y<-as.factor(testData_equipo_dico$Y)
+str(testData_equipo_dico$Y)
+```
+
+```{r}
+testData_NOID_equipo_dico <- testData_equipo_dico[, -which(names(testData_equipo_dico) == "Y")]
+
+```
+
+
+```{r}
+ciego_data <- as.data.frame(featureMatrix_ciegos_total)
+
+ciego_data <- ciego_data[, colnames(trainData_equipo_dico)]
+# Si viene con columna Y (conocida), separala:
+if ("Y" %in% colnames(ciego_data)) {
+  Y_ciego <- ciego_data$Y
+  X_ciego <- ciego_data[, setdiff(colnames(ciego_data), "Y")]
+} else {
+  X_ciego <- ciego_data
+  Y_ciego <- NULL
+}
+
+X_ciego<-as.data.frame(X_ciego)
+colnames(X_ciego) <- ("14693.0318613713")
+X_ciego<-dichotomize(X_ciego, thr)
+X_ciego<-as.data.frame(X_ciego)
+```
+
+```{r}
+# Predicciones (clase)
+predicciones_ciego_knn_dic <- predict(KNN_equipo_dic, newdata = X_ciego)
+levels(predicciones_ciego_knn_dic) <- c("Cov.Neg", "Cov.Pos")
+
+# Predicciones (probabilidades)
+prob_ciego_knn_dic <- predict(KNN_equipo_dic, newdata = X_ciego, type = "prob")
+prob_ciego_knn_dic <- prob_ciego_knn_dic %>%
+  rename(Cov.Neg = 1, Cov.Pos = 2)
+
+
+  # Confusion matrix
+  ciego_tot_equipo_knn_dic<-caret::confusionMatrix(predicciones_ciego_knn_dic, Y_ciego, positive = "Cov.Pos")
+
+  # AUC
+  library(pROC)
+  Y_ciego_num <- as.numeric(Y_ciego)
+  roc_ciego <- roc(Y_ciego_num, prob_ciego_knn_dic[, "Cov.Pos"])
+  plot(roc_ciego, main = "ROC en Datos Ciegos", col = "darkgreen", lwd = 2)
+  AUC_KNN_equipo_dic_ciego<-auc(roc_ciego)
+
+
+
+
+accuracyKNN_equipo_dic_ciego <- ciego_tot_equipo_knn_dic$overall["Accuracy"]
+kappaKNN_equipo_dic_ciego <- ciego_tot_equipo_knn_dic$overall["Kappa"]
+# Métricas por clase
+sensitivityKNN_equipo_dic_ciego<- ciego_tot_equipo_knn_dic$byClass["Sensitivity"]
+specificityKNN_equipo_dic_ciego <- ciego_tot_equipo_knn_dic$byClass["Specificity"]
+precisionKNN_equipo_dic_ciego <- ciego_tot_equipo_knn_dic$byClass["Pos Pred Value"]
+recallKNN_equipo_dic_ciego<- ciego_tot_equipo_knn_dic$byClass["Sensitivity"]  # Igual a sensitivity
+f1_scoreKNN_equipo_dic_ciego <- ciego_tot_equipo_knn_dic$byClass["F1"]
+npvKNN_equipo_dic_ciego <- ciego_tot_equipo_knn_dic$byClass["Neg Pred Value"]
+prevalenceKNN_equipo_dic_ciego <- ciego_tot_equipo_knn_dic$byClass["Prevalence"]
+detection_rateKNN_equipo_dic_ciego <- ciego_tot_equipo_knn_dic$byClass["Detection Rate"]
+balanced_accuracyKNN_equipo_dic_ciego <- ciego_tot_equipo_knn_dic$byClass["Balanced Accuracy"]
+
+# Calcular LR+ y LR- que no vienen directamente en confusionMatrix
+LR_plusKNN_equipo_dic_ciego <- sensitivityKNN_equipo_dic_ciego / (1 - specificityKNN_equipo_dic_ciego)
+LR_minusKNN_equipo_dic_ciego <- (1 - sensitivityKNN_equipo_dic_ciego) / specificityKNN_equipo_dic_ciego
+
+# Para manejar valores especiales
+LR_plusKNN_equipo_dic_ciego <- ifelse(is.nan(LR_plusKNN_equipo_dic_ciego) | is.infinite(LR_plusKNN_equipo_dic_ciego), NA, LR_plusKNN_equipo_dic_ciego)
+LR_minusKNN_equipo_dic_ciego <- ifelse(is.nan(LR_minusKNN_equipo_dic_ciego) | is.infinite(LR_minusKNN_equipo_dic_ciego), NA, LR_minusKNN_equipo_dic_ciego)
+
+# Crear un dataframe con todas las métricas
+metrics_KNN_dic_equipo_ciego_CV <- data.frame(
+  Metric = c("Accuracy", "Kappa", "Sensitivity", "Specificity", "Precision",
+             "F1_Score", "NPV", "Prevalence", "Detection_Rate",
+             "Balanced_Accuracy", "LR+", "LR-", "AUC"),
+  KNN_dic_equipo_tot_CV = c(accuracyKNN_equipo_dic_ciego, kappaKNN_equipo_dic_ciego, sensitivityKNN_equipo_dic_ciego, specificityKNN_equipo_dic_ciego, precisionKNN_equipo_dic_ciego,
+            f1_scoreKNN_equipo_dic_ciego, npvKNN_equipo_dic_ciego, prevalenceKNN_equipo_dic_ciego, detection_rateKNN_equipo_dic_ciego,
+            balanced_accuracyKNN_equipo_dic_ciego, LR_plusKNN_equipo_dic_ciego, LR_minusKNN_equipo_dic_ciego, AUC_KNN_equipo_dic_ciego))
+
+# Mostrar los resultados
+print(metrics_KNN_dic_equipo_ciego_CV)
+```
+
+
+
+
+
+
+
+
+
+# Modelos (con datos combat_corrected POR EQUIPO pero sin dictomizar)
+
+
+
+```{r}
+#combat_corrected_equipo_tot<- cbind(combat_corrected_equipo_tot, label=Datos_actualizados$PCR.Cov)#1=neg,2=pos
+```
+
+```{r}
+# combat_corrected_equipo_tot<-as.data.frame(combat_corrected_equipo_tot)
+# combat_corrected_equipo_tot$label<-as.factor(combat_corrected_equipo_tot$label)
+# str(combat_corrected_equipo_tot)
+```
+
+
+
+
+
+
+```{r}
+
+library(tidymodels)
+# set.seed asegura reproducibilidad
+set.seed(42)
+
+#Utilizo tidymodels para dividir de manera proporcional
+
+split_data <- initial_split(combat_corrected_equipo_tot, strata = "Y", prop = 0.8)
+
+# Obtener los conjuntos de entrenamiento y prueba
+trainData_equipo <- training(split_data)
+testData_equipo <- testing(split_data)
+
+# Ver la distribución de clases en ambos conjuntos
+table(trainData_equipo$Y)
+table(testData_equipo$Y)
+
+
+```
+```{r}
+trainData_equipo <- trainData_equipo[, -ncol(trainData_equipo)]
+train_subset_equipo <- trainData_equipo[, -ncol(trainData_equipo)]
+```
+
+```{r}
+labels <- trainData_equipo$Y
+
+#Definir número de bootstraps
+n_boot <- 10
+set.seed(123)
+
+#Inicializar lista para guardar umbrales
+thresholds_list <- vector("list", n_boot)
+
+#  Ejecutar bootstrap
+for (i in 1:n_boot) {
+  sample_indices <- sample(1:nrow(train_subset_equipo), replace = TRUE)
+  sampled_data <- train_subset_equipo[sample_indices, ]
+  sampled_labels <- labels[sample_indices]
+
+  thresholds <- optimizeThreshold(sampled_data, sampled_labels)
+  thresholds_list[[i]] <- thresholds
+}
+
+# Unir todos los umbrales en un data frame
+thresholds_df <- do.call(rbind, thresholds_list)
+
+# Calcular el CV de cada pico
+cv_thresholds <- apply(thresholds_df, 2, function(x) {
+  media <- mean(x, na.rm = TRUE)
+  sd <- sd(x, na.rm = TRUE)
+  if (media == 0) return(Inf) else return((sd / media) * 100)
+})
+
+#Seleccionar los picos con CV < 40 (estables)
+picos_estables <- names(cv_thresholds[cv_thresholds < 40])
+
+#  Filtrar la matriz original para quedarte solo con esos picos
+train_subset_equipo <- train_subset_equipo[, picos_estables]
+
+#  Volver a combinar con la variable Y
+#train_subset_fecha$Y <- labels
+```
+
+
+
+
+
+```{r}
+trainData_equipo <- trainData_equipo[, colnames(trainData_equipo_dico)]
+testData_equipo <- testData_equipo[, colnames(trainData_equipo_dico)]
+```
+
+
+
+```{r}
+# Especificar la variable dependiente en la fórmula
+formula <- Y ~ .
+```
+
+
+
+```{r}
+# Submuestras y repeticiones
+set.seed(42)
+
+particiones <- 3
+repeticiones <- 5
+```
+
+```{r}
+# Specify the tunning configuration (mtry hyperparameter depends on the number of columns)
+seed.rf <- 42
+set.seed(seed.rf) 
+
+
+mtry <- c(1,2)
+min.node.size <- seq(1, 10, 2)  # Reducir el rango
+hiperparametros <- expand.grid(mtry =  mtry)
+
+
+seeds <- vector(mode = "list", length = (particiones * repeticiones) + 1)
+
+for (i in 1:(particiones * repeticiones)) {
+  seeds[[i]] <- sample.int(500, nrow(hiperparametros)) 
+}
+# genera un vector de nrow(hiperparametros) números aleatorios entre 1 y 500.
+#Esto asegura que cada combinación de hiperparámetros tenga una semilla diferente en cada iteración.
+
+seeds[[(particiones * repeticiones) + 1]] <- sample.int(500, 1)
+
+# Training control
+```
+
+
+
+```{r}
+# Training control
+
+cross_val_rf <- trainControl(
+  method = "repeatedcv",
+  number = particiones,
+  repeats = repeticiones,
+  returnResamp = "final",
+  verboseIter = FALSE,
+  allowParallel = TRUE,
+  classProbs = TRUE,
+  seeds = seeds)
+
+# Training 
+
+
+trainData_equipo$Y <- factor(as.numeric(factor(trainData_equipo$Y)))
+trainData_equipo$Y <- factor(trainData_equipo$Y, levels = c("1", "2"))
+levels(trainData_equipo$Y) <- make.names(levels(trainData_equipo$Y))
+
+```
+
+# Random forest
+
+
+```{r}
+
+library(caret)
+
+
+RF_equipo_fx <- function(df_train, model, grid, metrica = "Accuracy", title = "modelo", control) {
+
+  
+  # Entrenar el modelo
+  RF_equipo <- caret::train(
+    Y ~ .,
+    data = df_train,
+    method = model,
+    tuneGrid = hiperparametros,
+    metric = metrica,
+    trControl = cross_val_rf
+  )
+  
+  # Mostrar resumen
+  print(RF_equipo)
+  plot(RF_equipo, main = title)
+  
+  # Guardar resultado
+  #save(RF_equipo, file = paste0(title, ".rda"))
+  
+  return(RF_equipo)
+}
+
+RF_equipo<-RF_equipo_fx(df_train=trainData_equipo, model="rf", grid=tuneGrid, metrica="Accuracy", title = "Primera_funcion" )
+print(RF_equipo)
+
+#save(RF_equipo, file = paste(title, ".rda"))
+
+
+```
+
+
+```{r}
+plot(RF_equipo)
+```
+
+
+
+
+
+
+
+----------------------------------------
+
+```{r}
+
+
+
+ciego_data <- as.data.frame(featureMatrix_ciegos_total)
+ciego_data<- ciego_data[, colnames(trainData_equipo)]
+# Si viene con columna Y (conocida), separala:
+if ("Y" %in% colnames(ciego_data)) {
+  Y_ciego <- ciego_data$Y
+  X_ciego <- ciego_data[, setdiff(colnames(ciego_data), "Y")]
+} else {
+  X_ciego <- ciego_data
+  Y_ciego <- NULL
+}
+
+
+
+X_ciego<-as.data.frame(X_ciego)
+Y_ciego<-as.factor(Y_ciego)
+colnames(X_ciego) <- "14693.0318613713"
+
+```
+
+
+
+#  Prediccion
+```{r}
+testData_equipo$Y<-as.factor(testData_equipo$Y)
+str(testData_equipo$Y)
+```
+
+```{r}
+testData_NOID_equipo <- testData_equipo[, -which(names(testData_equipo) == "Y")]
+
+```
+
+# RF
+
+
+
+```{r}
+# Predicciones (clase)
+predicciones_ciego_equipo_tot <- predict(RF_equipo, newdata = X_ciego)
+levels(predicciones_ciego_equipo_tot) <- c("Cov.Neg", "Cov.Pos")
+
+# Predicciones (probabilidades)
+prob_ciego <- predict(RF_equipo, newdata = X_ciego, type = "prob")
+#prob_ciego$Cov.Neg<-prob_ciego$X1
+#prob_ciego$Cov.Pos<-prob_ciego$X2
+
+
+  # Confusion matrix
+  ciego_rf_tot_equipo<-caret::confusionMatrix(predicciones_ciego_equipo_tot, Y_ciego, positive = "Cov.Pos")
+
+  # AUC
+  library(pROC)
+  Y_ciego_num <- as.numeric(Y_ciego)
+  roc_ciego <- roc(Y_ciego_num, prob_ciego[, "X2"])
+  plot(roc_ciego, main = "ROC en Datos Ciegos", col = "darkgreen", lwd = 2)
+  auc_value_RF_equipo_ciego<-auc(roc_ciego)
+
+
+
+accuracy_RF_equipo_ciego <- ciego_rf_tot_equipo$overall["Accuracy"]
+kappa_RF_equipo_ciego <- ciego_rf_tot_equipo$overall["Kappa"]
+
+# Métricas por clase
+sensitivity_RF_equipo_ciego <- ciego_rf_tot_equipo$byClass["Sensitivity"]
+specificity_RF_equipo_ciego <- ciego_rf_tot_equipo$byClass["Specificity"]
+precision_RF_equipo_ciego <- ciego_rf_tot_equipo$byClass["Pos Pred Value"]
+recall_RF_equipo_ciego <- ciego_rf_tot_equipo$byClass["Sensitivity"]  # Igual a sensitivity
+f1_score_RF_equipo_ciego <- ciego_rf_tot_equipo$byClass["F1"]
+npv_RF_equipo_ciego <- ciego_rf_tot_equipo$byClass["Neg Pred Value"]
+prevalence_RF_equipo_ciego <- ciego_rf_tot_equipo$byClass["Prevalence"]
+detection_rate_RF_equipo_ciego <- ciego_rf_tot_equipo$byClass["Detection Rate"]
+balanced_accuracy_RF_equipo_ciego <- ciego_rf_tot_equipo$byClass["Balanced Accuracy"]
+
+# Calcular LR+ y LR- que no vienen directamente en confusionMatrix
+LR_plus_RF_equipo_ciego <- sensitivity_RF_equipo_ciego / (1 - specificity_RF_equipo_ciego)
+LR_minus_RF_equipo_ciego <- (1 - sensitivity_RF_equipo_ciego) / specificity_RF_equipo_ciego
+
+# Para manejar valores especiales
+LR_plus_RF_equipo_ciego <- ifelse(is.nan(LR_plus_RF_equipo_ciego) | is.infinite(LR_plus_RF_equipo_ciego), NA, LR_plus_RF_equipo_ciego)
+LR_minus_RF_equipo_ciego <- ifelse(is.nan(LR_minus_RF_equipo_ciego) | is.infinite(LR_minus_RF_equipo_ciego), NA, LR_minus_RF_equipo_ciego)
+
+
+# Crear un dataframe con todas las métricas
+metrics_rf_equipo_ciego_cv <- data.frame(
+  Metric = c("Accuracy", "Kappa", "Sensitivity", "Specificity", "Precision",
+             "F1_Score", "NPV", "Prevalence", "Detection_Rate",
+             "Balanced_Accuracy", "LR+", "LR-", "AUC"),
+  rf_equipo_tot_cv = c(accuracy_RF_equipo_ciego, kappa_RF_equipo_ciego, sensitivity_RF_equipo_ciego, specificity_RF_equipo_ciego, precision_RF_equipo_ciego, f1_score_RF_equipo_ciego, npv_RF_equipo_ciego, prevalence_RF_equipo_ciego, detection_rate_RF_equipo_ciego,
+            balanced_accuracy_RF_equipo_ciego, LR_plus_RF_equipo_ciego, LR_minus_RF_equipo_ciego, auc_value_RF_equipo_ciego)
+)
+
+# Mostrar los resultados
+print(metrics_rf_equipo_ciego_cv)
+```
+
+
+
+
+# Prediccion RANGER
+
+```{r}
+Train.rf_equipo  <- as.data.frame(trainData_equipo) 
+
+Test.rf_equipo <- as.data.frame(testData_equipo)
+```
+
+```{r}
+# objeto_recipe <- recipe(formula = Y ~ .,
+#                         data =  Train.rf_equipo)
+# 
+# objeto_recipe <- objeto_recipe %>% 
+#   step_nzv(all_predictors())
+# 
+# trained_recipe <- prep(objeto_recipe, training = Train.rf_equipo)
+# 
+# Train.rf_equipo <- bake(trained_recipe, new_data = Train.rf_equipo)
+# Test.rf_equipo  <- bake(trained_recipe, new_data = Test.rf_equipo)
+```
+
+```{r}
+# Submuestras y repeticiones
+
+# particiones  <- 5
+# repeticiones <- 15
+particiones <- 3
+repeticiones <- 5
+```
+
+```{r}
+# Specify the tunning configuration (mtry hyperparameter depends on the number of columns)
+seed.rf <- 42
+set.seed(seed.rf) 
+
+
+mtry <- c(1)
+min.node.size <- seq(1, 10, 2)  # Reducir el rango
+hiperparametros <- expand.grid(mtry =  mtry,
+                               #min.node.size = seq(1, 30, 2),
+                               min.node.size=min.node.size,
+                               splitrule = "gini")
+
+
+seeds <- vector(mode = "list", length = (particiones * repeticiones) + 1)
+
+for (i in 1:(particiones * repeticiones)) {
+  seeds[[i]] <- sample.int(500, nrow(hiperparametros)) 
+}
+
+seeds[[(particiones * repeticiones) + 1]] <- sample.int(500, 1)
+
+# Training control
+```
+
+
+
+```{r}
+# Training control
+
+cross_val_ranger <- trainControl(
+  method = "repeatedcv",
+  number = particiones,
+  repeats = repeticiones,
+  returnResamp = "final",
+  verboseIter = FALSE,
+  allowParallel = TRUE,
+  classProbs = TRUE,
+  seeds = seeds)
+
+# Training 
+
+# Convertir los niveles de Train.rf$sensi a números también
+
+Train.rf_equipo$Y <- factor(as.numeric(factor(Train.rf_equipo$Y)))
+Train.rf_equipo$Y <- factor(Train.rf_equipo$Y, levels = c("1", "2"))
+levels(Train.rf_equipo$Y) <- make.names(levels(Train.rf_equipo$Y))
+
+```
+
+
+
+
+
+```{r}
+class(Train.rf_equipo)
+```
+
+
+```{r}
+Train.rf_equipo <- as.data.frame(Train.rf_equipo)
+```
+
+
+```{r}
+Train.rf_equipo <- as.data.frame(Train.rf_equipo)
+
+# Convertimos Y a factor
+Train.rf_equipo$Y <- as.factor(Train.rf_equipo$Y)
+
+# Definimos número de árboles
+#n_trees <- 500 # default
+n_trees<-200
+# Establecemos semilla para reproducibilidad
+set.seed(80)
+
+# Ejecutamos el entrenamiento
+results_equipo <- caret::train(Y ~ .,
+                data = Train.rf_equipo, 
+                method = "ranger",
+                tuneGrid = hiperparametros,
+                metric = "Accuracy",
+                importance = "impurity",
+                trControl = cross_val_ranger,
+                num.trees = n_trees)
+               #allowParallel=FALSE)  
+
+
+```
+
+
+#
+#
+```{r}
+# Definir los valores de num.trees a probar
+num_trees_range <- c(10, 50, 100, 200, 500, 1000, 1500)
+
+# Lista para almacenar los modelos
+modelos_equipo <- list()
+
+# Establecer semilla para reproducibilidad
+set.seed(80)
+
+# Iterar sobre cada cantidad de árboles
+for (nt in num_trees_range) {
+  cat("Entrenando modelo con", nt, "árboles...\n")
+
+  modelos_equipo[[as.character(nt)]] <- caret::train(
+    Y ~ .,
+    data = Train.rf_equipo,
+    method = "ranger",
+    tuneGrid = hiperparametros,
+    metric = "Accuracy",
+    importance = "impurity",
+    trControl = cross_val_ranger,
+    num.trees = nt
+  )
+}
+
+```
+#
+#
+#
+```{r}
+  resultados_modelos <- data.frame(
+  num_trees = num_trees_range,
+  Accuracy = sapply(modelos_equipo, function(m) max(m$results$Accuracy, na.rm = TRUE)),
+  Kappa = sapply(modelos_equipo, function(m) max(m$results$Kappa, na.rm = TRUE)),
+  mtry = sapply(modelos_equipo, function(m) m$bestTune$mtry),
+  min.node.size = sapply(modelos_equipo, function(m) m$bestTune$min.node.size)
+)
+
+# Ordenamos los modelos de mejor a peor Accuracy
+resultados_modelos <- resultados_modelos[order(-resultados_modelos$Accuracy), ]
+
+print(head(resultados_modelos, 20))
+#
+```
+#
+#
+```{r}
+# # Encontrar el índice del modelo con mejor Accuracy en la tabla de resultados
+mejor_idx <- which.max(resultados_modelos$Accuracy)
+
+# Extraer la mejor combinación de hiperparámetros
+mejor_num_trees <- resultados_modelos$num_trees[mejor_idx]
+mejor_mtry <- resultados_modelos$mtry[mejor_idx]
+mejor_min_node_size <- resultados_modelos$min.node.size[mejor_idx]
+
+# Extraer el modelo correspondiente en la lista
+mejor_modelo <- modelos_equipo[[as.character(mejor_num_trees)]]
+
+# Mostrar los hiperparámetros seleccionados
+cat("Mejor modelo seleccionado:\n")
+cat("Número de árboles:", mejor_num_trees, "\n")
+cat("mtry:", mejor_mtry, "\n")
+cat("min.node.size:", mejor_min_node_size, "\n")
+
+# Mostrar detalles del mejor modelo
+print(mejor_modelo)
+
+```
+
+
+
+```{r}
+
+
+rf_cv<-function(df_train, model, grid, metrica, title, num.trees){
+
+ranger_equipo <- caret::train(
+  Y ~ .,
+  data = df_train,
+  method = "ranger",
+  tuneGrid = hiperparametros,
+  metric = "Accuracy",
+  importance = "impurity",
+  trControl = cross_val_ranger,  # Si querés usar validación cruzada
+  num.trees=num.trees  # Número de árboles fijo
+)
+
+return(ranger_equipo)
+}
+
+#
+
+ranger_equipo<-rf_cv(Train.rf_equipo,"ranger",hiperparametros,"Accuracy", num.trees=mejor_num_trees)
+
+# ranger_equipo <- caret::train(
+#   Y ~ .,
+#   data = Train.rf_equipo,
+#   method = "ranger",
+#   tuneGrid = data.frame(mtry = 2, min.node.size = 1, splitrule = "gini"),
+#   metric = "Accuracy",
+#   importance = "impurity",
+#   trControl = cross_val,  # Si querés usar validación cruzada
+#   num.trees = 200  # Número de árboles fijo
+# )
+
+```
+
+
+
+```{r}
+Test.rf_equipo$Y<-as.factor(Test.rf_equipo$Y)
+str(Test.rf_equipo$Y)
+```
+
+```{r}
+testRF_NOID_equipo <- Test.rf_equipo[, -which(names(Test.rf_equipo) == "Y")]
+
+```
+
+
+
+
+###Desafio con ciego
+
+```{r}
+# ciego_data <- as.data.frame(ciego_combat_corrected_equipo_tot)
+# 
+# # Si viene con columna Y (conocida), separala:
+# if ("Y" %in% colnames(ciego_data)) {
+#   Y_ciego <- ciego_data$Y
+#   X_ciego <- ciego_data[, setdiff(colnames(ciego_data), "Y")]
+# } else {
+#   X_ciego <- ciego_data
+#   Y_ciego <- NULL
+# }
+
+```
+
+
+```{r}
+# Predicciones (clase)
+predicciones_ciego <- predict(ranger_equipo, newdata = X_ciego)
+levels(predicciones_ciego) <- c("Cov.Neg", "Cov.Pos")
+
+# Predicciones (probabilidades)
+prob_ciego <- predict(ranger_equipo, newdata = X_ciego, type = "prob")
+prob_ciego <- prob_ciego %>%
+  rename(Cov.Neg = X1, Cov.Pos = X2)
+
+
+  # Confusion matrix
+  ciego_ranger_tot_equipo<-caret::confusionMatrix(predicciones_ciego, Y_ciego, positive = "Cov.Pos")
+
+  # AUC
+  library(pROC)
+  Y_ciego_num <- as.numeric(Y_ciego)
+  roc_ciego <- roc(Y_ciego_num, prob_ciego[, "Cov.Pos"])
+  plot(roc_ciego, main = "ROC en Datos Ciegos", col = "darkgreen", lwd = 2)
+  AUC_Ranger_equipo_ciego<-auc(roc_ciego)
+
+
+
+
+
+accuracyRANGER_equipo_ciego <- ciego_ranger_tot_equipo$overall["Accuracy"]
+kappaRANGER_equipo_ciego <- ciego_ranger_tot_equipo$overall["Kappa"]
+
+# Métricas por clase
+sensitivityRANGER_equipo_ciego <- ciego_ranger_tot_equipo$byClass["Sensitivity"]
+specificityRANGER_equipo_ciego <- ciego_ranger_tot_equipo$byClass["Specificity"]
+precisionRANGER_equipo_ciego<- ciego_ranger_tot_equipo$byClass["Pos Pred Value"]
+recallRANGER_equipo_ciego <- ciego_ranger_tot_equipo$byClass["Sensitivity"]  # Igual a sensitivity
+f1_scoreRANGER_equipo_ciego <- ciego_ranger_tot_equipo$byClass["F1"]
+npvRANGER_equipo_ciego <- ciego_ranger_tot_equipo$byClass["Neg Pred Value"]
+prevalenceRANGER_equipo_ciego <- ciego_ranger_tot_equipo$byClass["Prevalence"]
+detection_rateRANGER_equipo_ciego <- ciego_ranger_tot_equipo$byClass["Detection Rate"]
+balanced_accuracyRANGER_equipo_ciego <- ciego_ranger_tot_equipo$byClass["Balanced Accuracy"]
+
+# Calcular LR+ y LR- que no vienen directamente en confusionMatrix
+LR_plusRANGER_equipo_ciego <- sensitivityRANGER_equipo_ciego / (1 - specificityRANGER_equipo_ciego)
+LR_minusRANGER_equipo_ciego<- (1 - sensitivityRANGER_equipo_ciego) / specificityRANGER_equipo_ciego
+
+# Para manejar valores especiales
+LR_plusRANGER_equipo_ciego <- ifelse(is.nan(LR_plusRANGER_equipo_ciego) | is.infinite(LR_plusRANGER_equipo_ciego), NA, LR_plusRANGER_equipo_ciego)
+
+LR_minusRANGER_equipo_ciego <- ifelse(is.nan(LR_minusRANGER_equipo_ciego) | is.infinite(LR_minusRANGER_equipo_ciego), NA, LR_minusRANGER_equipo_ciego)
+
+
+metrics_RANGER_equipo_ciego_CV <- data.frame(
+  Metric = c("Accuracy", "Kappa", "Sensitivity", "Specificity", "Precision",
+             "F1_Score", "NPV", "Prevalence", "Detection_Rate",
+             "Balanced_Accuracy", "LR+", "LR-", "AUC"),
+  RANGER_equipo_tot_CV = c(accuracyRANGER_equipo_ciego, kappaRANGER_equipo_ciego, sensitivityRANGER_equipo_ciego, specificityRANGER_equipo_ciego, precisionRANGER_equipo_ciego, f1_scoreRANGER_equipo_ciego, npvRANGER_equipo_ciego, prevalenceRANGER_equipo_ciego, detection_rateRANGER_equipo_ciego,
+            balanced_accuracyRANGER_equipo_ciego, LR_plusRANGER_equipo_ciego, LR_minusRANGER_equipo_ciego, AUC_Ranger_equipo_ciego)
+)
+print(metrics_RANGER_equipo_ciego_CV)
+```
+
+
+
+

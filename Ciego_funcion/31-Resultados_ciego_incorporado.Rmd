@@ -1,0 +1,39 @@
+---
+title: "Untitled"
+author: "Karina Roitman"
+date: "2025-07-12"
+output: html_document
+---
+
+
+```{r}
+ciego_incorporado<-list(metrics_rf_equipo_ciego,
+metrics_KNN_dic_equipo_ciego,
+metrics_RANGER_equipo_ciego,
+metrics_rf_fecha_ciego,
+metrics_rf_matrix_ciego, metricsRF_matrix_carga_ciego, metricsKNN_equipo_dic_cc_ciego, metricsRanger_matrix_dich_cc_ciego
+) %>%
+  reduce(full_join, by = "Metric")
+
+write.csv(ciego_incorporado, file = "resultados_ciego_incorporado.csv", row.names = FALSE)
+```
+
+
+
+```{r}
+
+
+ciego_funcion<-list(metrics_RANGER_equipo_ciego_fx,
+metrics_KNN_dic_equipo_ciego_fx,
+metrics_rf_equipo_ciego_fx,
+metrics_rf_fecha_ciego_fx,
+metrics_rf_matrix_ciego_fx,
+metricsRF_matrix_carga_ciego_fx,
+metricsKNN_equipo_dic_cc_ciego_fx,
+metricsRanger_matrix_dich_cc_ciego_fx
+) %>%
+  reduce(full_join, by = "Metric")
+
+write.csv(ciego_funcion, file = "resultados_ciego_FX.csv", row.names = FALSE)
+```
+

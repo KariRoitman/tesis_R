@@ -1,0 +1,605 @@
+---
+title: "SIN CORRECCION"
+author: "Karina Roitman"
+date: "2024-10-10"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+
+# Modelos sin corrección de efecto batch
+
+```{r}
+library(MALDIquant)
+library(MALDIquantForeign)
+library(readBrukerFlexData)
+library(ggplot2)
+library(caret)
+library(stats)
+library(binda)
+library(factoextra)
+library(binda)
+library(dplyr)
+library(crossval)
+library(ggrepel)
+library(corrr)
+library(ggplot2)
+library(FactoMineR)
+```
+
+sin dicotomizar
+
+
+```{r}
+library(dplyr)
+
+# Eliminar la columna 'label' usando dplyr
+#featureMatrix <- featureMatrix %>% select(-label)
+
+
+```
+
+
+
+
+# Modelos desde matriz dicotomizada sin corregir por batch
+
+
+```{r}
+
+featureMatrix_bind<-as.data.frame(featureMatrix_bind)
+featureMatrix_bind$Y <- as.factor(featureMatrix_bind$Y)
+#featureMatrix_bind<- featureMatrix_bind[, c(1:61, 63)]
+```
+
+
+
+```{r}
+
+library(tidymodels)
+# set.seed asegura reproducibilidad
+set.seed(42)
+
+#Utilizo tidymodels para dividir de manera proporcional
+
+split_data <- initial_split(featureMatrix_bind, strata = "Y", prop = 0.8)
+
+# Obtener los conjuntos de entrenamiento y prueba
+trainData_matriz_dico <- training(split_data)
+testData_matriz_dico <- testing(split_data)
+
+```
+
+```{r}
+trainData_matriz_dico<-as.data.frame(trainData_matriz_dico)
+trainData_matriz_dico$Y<-as.factor(trainData_matriz_dico$Y)
+str(trainData_matriz_dico)
+```
+
+```{r}
+train_subset_matriz <- trainData_matriz_dico[, -ncol(trainData_matriz_dico)]
+```
+
+
+
+```{r}
+labels <- trainData_matriz_dico$Y
+
+#Definir número de bootstraps
+n_boot <- 10
+set.seed(123)
+
+#Inicializar lista para guardar umbrales
+thresholds_list <- vector("list", n_boot)
+
+#  Ejecutar bootstrap
+for (i in 1:n_boot) {
+  sample_indices <- sample(1:nrow(train_subset_matriz), replace = TRUE)
+  sampled_data <- train_subset_matriz[sample_indices, ]
+  sampled_labels <- labels[sample_indices]
+
+  thresholds <- optimizeThreshold(sampled_data, sampled_labels)
+  thresholds_list[[i]] <- thresholds
+}
+
+# Unir todos los umbrales en un data frame
+thresholds_df <- do.call(rbind, thresholds_list)
+
+# Calcular el CV de cada pico
+cv_thresholds <- apply(thresholds_df, 2, function(x) {
+  media <- mean(x, na.rm = TRUE)
+  sd <- sd(x, na.rm = TRUE)
+  if (media == 0) return(Inf) else return((sd / media) * 100)
+})
+
+#Seleccionar los picos con CV < 40 (estables)
+picos_estables <- names(cv_thresholds[cv_thresholds < 40])
+
+#  Filtrar la matriz original para quedarte solo con esos picos
+train_subset_matriz <- train_subset_matriz[, picos_estables]
+
+#  Volver a combinar con la variable Y
+#train_subset_fecha$Y <- labels
+```
+
+
+
+```{r}
+trainData_matriz_dico<- cbind(train_subset_matriz, trainData_matriz_dico$Y)#1=neg,2=pos
+```
+
+
+
+
+```{r}
+# Filtrar el df de thresholds para los picos estables
+thresholds_estables <- thresholds_df[, picos_estables, drop = FALSE]
+
+# Calcular la media por columna (pico)
+thr <- colMeans(thresholds_estables, na.rm = TRUE)
+
+# Mostrar
+print(thr)
+
+```
+
+
+
+
+```{r}
+str(trainData_matriz_dico)
+trainData_matriz_dico<-as.data.frame(trainData_matriz_dico)
+```
+
+
+
+```{r}
+library(dplyr)
+trainData_matriz_dico <- trainData_matriz_dico %>% rename(Y = ncol(trainData_matriz_dico))
+str(trainData_matriz_dico$Y)
+```
+
+
+```{r}
+trainData_matriz_dico<-as.data.frame(trainData_matriz_dico)
+trainData_matriz_dico$Y<-as.factor(trainData_matriz_dico$Y)
+str(trainData_matriz_dico)
+```
+
+
+
+```{r}
+zero_var_indices <- caret::nearZeroVar(trainData_matriz_dico[,1:(ncol(trainData_matriz_dico) - 1)])
+if (length(zero_var_indices) > 0) {
+    trainData_matriz_dico <- trainData_matriz_dico[, -zero_var_indices]
+}
+
+```
+
+
+
+```{r}
+train_subset_matriz <- dichotomize(train_subset_matriz, thr)
+train_subset_matriz<-as.data.frame(train_subset_matriz)
+```
+
+
+
+
+```{r}
+trainData_matriz_dico<- cbind(train_subset_matriz, trainData_matriz_dico$Y)#1=neg,2=pos
+trainData_matriz_dico<-as.data.frame(trainData_matriz_dico)
+trainData_matriz_dico <- trainData_matriz_dico %>% rename(Y = ncol(trainData_matriz_dico))
+```
+
+
+
+
+```{r}
+test_subset_matriz <- testData_matriz_dico[, 1:(ncol(testData_matriz_dico) - 1)]
+```
+
+
+
+
+
+```{r}
+test_subset_matriz <- test_subset_matriz[, colnames(trainData_matriz_dico)[1:(ncol(trainData_matriz_dico) - 1)]]
+#test_subset <-  test_subset[, colnames(trainData_equipo_dico)]
+thr_filtered <-  thr[colnames(trainData_matriz_dico)[1:(ncol(trainData_matriz_dico) - 1)]]
+#Dicotimizacion de la matriz de intensidad
+test_subset_matriz <- dichotomize(test_subset_matriz, thr_filtered) 
+
+```
+
+
+```{r}
+testData_matriz_dico<-as.data.frame(testData_matriz_dico)
+testData_matriz_dico<- cbind(test_subset_matriz, testData_matriz_dico$Y)#1=neg,2=pos
+testData_matriz_dico<-as.data.frame(testData_matriz_dico)
+testData_matriz_dico <- testData_matriz_dico %>% rename(Y = ncol(testData_matriz_dico))
+testData_matriz_dico$Y<-as.factor(testData_matriz_dico$Y)
+
+testData_matriz_dico$Y <- factor(
+  testData_matriz_dico$Y,
+  levels = c(1, 2),
+  labels = levels(trainData_matriz_dico$Y))
+```
+
+
+
+```{r}
+library(caret)
+#control1 <- trainControl(method = "cv", number = 5)
+#en esta primera vez pruebo con crossval
+```
+
+```{r}
+# Especificar la variable dependiente en la fórmula
+formula <- Y ~ .
+```
+
+
+#ranger
+
+
+```{r}
+library(keras)
+library(tensorflow)
+library(reticulate)
+library(caret)
+```
+
+
+```{r}
+Train.rf_matrix_dico  <- as.data.frame(trainData_matriz_dico) 
+
+Test.rf_matrix_dico <- as.data.frame(testData_matriz_dico)
+```
+
+
+```{r}
+
+library(recipes)
+
+
+#  Definir el objeto recipe
+objeto_recipe <- recipe(Y ~ ., data = Train.rf_matrix_dico) %>%
+  update_role(Y, new_role = "outcome")  # Especificar que Y es la variable de salid
+
+#  Ajustar el recipe a los datos de entrenamiento
+trained_recipe <- prep(objeto_recipe, training = Train.rf_matrix_dico)
+
+#  Aplicar la transformación a los datos de entrenamiento
+Train.rf_matrix_dico <- bake(trained_recipe, new_data = Train.rf_matrix_dico)
+
+#  Aplicar la transformación a los datos de prueba
+Test.rf_matrix_dico <- bake(trained_recipe, new_data = Test.rf_matrix_dico)
+
+# Verificar que no haya NA en Y después del procesamiento
+table(Test.rf_matrix_dico$Y)
+
+```
+
+```{r}
+# Submuestras y repeticiones
+
+# particiones  <- 5
+# repeticiones <- 15
+particiones <- 3
+repeticiones <- 5
+```
+
+```{r}
+# Specify the tunning configuration (mtry hyperparameter depends on the number of columns)
+seed.rf <- 42
+set.seed(seed.rf) 
+
+mtry <- c(1, 2)
+min.node.size <- seq(1, 10, 2)  # Reducir el rango
+hiperparametros <- expand.grid(mtry =  mtry,
+                               #min.node.size = smatrix(1, 30, 2),
+                               min.node.size=min.node.size,
+                               splitrule = "gini")
+```
+
+
+```{r}
+
+# Seeds
+seed.rf <- 42
+set.seed(seed.rf)
+
+seeds <- vector(mode = "list", length = (particiones * repeticiones) + 1)
+
+for (i in 1:(particiones * repeticiones)) {
+  seeds[[i]] <- sample.int(500, nrow(hiperparametros)) 
+}
+
+seeds[[(particiones * repeticiones) + 1]] <- sample.int(500, 1)
+
+# Training control
+```
+
+
+
+```{r}
+# Training control
+set.seed(42)
+# cross_val <- trainControl(
+#   method = "repeatedcv",
+#   number = particiones,
+#   repeats = repeticiones,
+#   returnResamp = "final",
+#   verboseIter = FALSE,
+#   allowParallel = TRUE,
+#   classProbs = TRUE,
+#   seeds = seeds)
+
+# Training 
+
+# Convertir los niveles de Train.rf$sensi a números también
+
+
+
+```
+
+
+
+
+
+```{r}
+class(Train.rf_matrix_dico)
+```
+
+
+```{r}
+Train.rf_matrix_dico <- as.data.frame(Train.rf_matrix_dico)
+```
+
+
+```{r}
+# Primero aseguramos que Train.rf es un dataframe
+Train.rf_matrix_dico <- as.data.frame(Train.rf_matrix_dico)
+
+# Convertimos Y a factor
+Train.rf_matrix_dico$Y <- as.factor(Train.rf_matrix_dico$Y)
+
+# Definimos número de árboles
+#n_trees <- 500 # default
+n_trees<-200
+# Establecemos semilla para reproducibilidad
+set.seed(80)
+
+cross_val_ranger <- trainControl(
+  method = "repeatedcv",
+  number = particiones,
+  repeats = repeticiones,
+  returnResamp = "final",
+  verboseIter = FALSE,
+  allowParallel = TRUE,
+  classProbs = TRUE,
+  seeds = seeds)
+
+# Ejecutamos el entrenamiento
+results_matrix_dico <- caret::train(Y ~ .,
+                data = Train.rf_matrix_dico, 
+                method = "ranger",
+                tuneGrid = hiperparametros,
+                metric = "Accuracy",
+                importance = "impurity",
+                trControl = cross_val_ranger,
+                num.trees = n_trees)
+               #allowParallel=FALSE)  # Aquí estaba el error, había texto adicional
+
+# Vector para probar diferentes números de árboles
+#num_trees_range <- c(10, 50, 100, 200, 500, 1000, 1500)
+
+```
+
+
+
+
+```{r}
+# Definir los valores de num.trees a probar
+num_trees_range <- c(10, 50, 100, 200, 500, 1000, 1500)
+
+# Lista para almacenar los modelos
+modelos_matrix_dico <- list()
+
+# Establecer semilla para reproducibilidad
+set.seed(80)
+
+# Iterar sobre cada cantidad de árboles
+for (nt in num_trees_range) {
+  cat("Entrenando modelo con", nt, "árboles...\n")
+  
+  modelos_matrix_dico[[as.character(nt)]] <- caret::train(
+    Y ~ .,
+    data = Train.rf_matrix_dico,
+    method = "ranger",
+    tuneGrid = hiperparametros,
+    metric = "Accuracy",
+    importance = "impurity",
+    trControl = cross_val_ranger,
+    num.trees = nt
+  )
+}
+
+```
+
+
+```{r}
+lengths_list <- list(
+  num_trees = length(num_trees_range),
+  Accuracy = length(sapply(modelos_matrix_dico, function(m) max(m$results$Accuracy, na.rm = TRUE))),
+  Kappa = length(sapply(modelos_matrix_dico, function(m) max(m$results$Kappa, na.rm = TRUE))),
+  mtry = length(sapply(modelos_matrix_dico, function(m) m$bestTune$mtry)),
+  min.node.size = length(sapply(modelos_matrix_dico, function(m) m$bestTune$min.node.size))
+)
+
+print(lengths_list)
+
+  resultados_modelos <- data.frame(
+  num_trees = num_trees_range,
+  Accuracy = sapply(modelos_matrix_dico, function(m) max(m$results$Accuracy, na.rm = TRUE)),
+  Kappa = sapply(modelos_matrix_dico, function(m) max(m$results$Kappa, na.rm = TRUE)),
+  mtry = sapply(modelos_matrix_dico, function(m) m$bestTune$mtry),
+  min.node.size = sapply(modelos_matrix_dico, function(m) m$bestTune$min.node.size)
+)
+
+# Ordenamos los modelos de mejor a peor Accuracy
+resultados_modelos <- resultados_modelos[order(-resultados_modelos$Accuracy), ]
+
+print(head(resultados_modelos, 20)) 
+
+```
+
+
+
+
+```{r}
+# Encontrar el índice del modelo con mejor Accuracy en la tabla de resultados
+mejor_idx <- which.max(resultados_modelos$Accuracy)
+
+# Extraer la mejor combinación de hiperparámetros
+mejor_num_trees <- resultados_modelos$num_trees[mejor_idx]
+mejor_mtry <- resultados_modelos$mtry[mejor_idx]
+mejor_min_node_size <- resultados_modelos$min.node.size[mejor_idx]
+
+# Extraer el modelo correspondiente en la lista
+mejor_modelo <- modelos_matrix_dico[[as.character(mejor_num_trees)]]
+
+# Mostrar los hiperparámetros seleccionados
+cat("Mejor modelo seleccionado:\n")
+cat("Número de árboles:", mejor_num_trees, "\n")
+cat("mtry:", mejor_mtry, "\n")
+cat("min.node.size:", mejor_min_node_size, "\n")
+
+# Mostrar detalles del mejor modelo
+print(mejor_modelo)
+
+```
+
+
+```{r}
+
+ranger_matrix_cc_dico_fx<-function(df_train, model, grid, metrica, num.trees){
+
+ranger_matriz_dico <- caret::train(
+  Y ~ .,
+  data = df_train,
+  method = "ranger",
+  tuneGrid = grid,
+  metric = "Accuracy",
+  importance = "impurity",
+  trControl = cross_val_ranger,  # Si querés usar validación cruzada
+  num.trees=num.trees  # Número de árboles fijo
+)
+
+return(ranger_matriz_dico)
+}
+
+
+
+ranger_matriz_dico<-ranger_matrix_cc_dico_fx(Train.rf_matrix_dico,"ranger",hiperparametros,"Accuracy", num.trees=mejor_num_trees)
+```
+
+
+```{r}
+Test.rf_matrix_dico$Y<-as.factor(Test.rf_matrix_dico$Y)
+str(Test.rf_matrix_dico$Y)
+```
+
+```{r}
+testRF_NOID_matrix_dico <- Test.rf_matrix_dico[, -which(names(Test.rf_matrix_dico) == "Y")]
+
+```
+
+
+
+
+
+
+```{r}
+ciego_data <- as.data.frame(featureMatrix_ciegos_total)
+ciego_data<- ciego_data[, colnames(trainData_matriz_dico)]
+Y_ciego<-ciego_data$Y
+#ciego_data <- ciego_data %>% rename(Y = ncol(ciego_data))
+
+X_ciego <- ciego_data[-ncol(ciego_data)]
+X_ciego <- dichotomize(X_ciego, thr)
+
+```
+
+
+
+```{r}
+
+predicciones_ciego_matrix_cc_fx <- predict(ranger_matriz_dico, newdata = X_ciego)
+levels(predicciones_ciego_matrix_cc_fx) <- c("Cov.Neg", "Cov.Pos")
+
+# Predicciones (probabilidades)
+prob_ciego <- predict(ranger_matriz_dico, newdata = X_ciego, type = "prob")
+#prob_ciego$Cov.Neg<-prob_ciego$X1
+#prob_ciego$Cov.Pos<-prob_ciego$X2
+
+
+levels(predicciones_ciego_matrix_cc_fx) <- c("Cov.Neg", "Cov.Pos")
+levels(Y_ciego) <- c("Cov.Neg", "Cov.Pos")
+
+
+
+  # Confusion matrix
+  ciego_ranger_matrix_cc_fx<-caret::confusionMatrix(predicciones_ciego_matrix_cc_fx, Y_ciego, positive = "Cov.Pos")
+
+  # AUC
+  library(pROC)
+  Y_ciego_num <- as.numeric(Y_ciego)
+  roc_ciego <- roc(Y_ciego_num, prob_ciego[, 2])
+  plot(roc_ciego, main = "ROC en Datos Ciegos", col = "darkgreen", lwd = 2)
+  AUC_Ranger_matrix_dich_cc_ciego<-auc(roc_ciego)
+  
+  
+   library(caret)
+accuracyRanger_matrix_dich_cc_ciego <- ciego_ranger_matrix_cc_fx$overall["Accuracy"]
+kappaRanger_matrix_dich_cc_ciego <- ciego_ranger_matrix_cc_fx$overall["Kappa"]
+# Métricas por clase
+sensitivityRanger_matrix_dich_cc_ciego <- ciego_ranger_matrix_cc_fx$byClass["Sensitivity"]
+specificityRanger_matrix_dich_cc_ciego <- ciego_ranger_matrix_cc_fx$byClass["Specificity"]
+precisionRanger_matrix_dich_cc_ciego <- ciego_ranger_matrix_cc_fx$byClass["Pos Pred Value"]
+recallRanger_matrix_dich_cc_ciego <- ciego_ranger_matrix_cc_fx$byClass["Sensitivity"]  # Igual a sensitivity
+f1_scoreRanger_matrix_dich_cc_ciego <- ciego_ranger_matrix_cc_fx$byClass["F1"]
+npvRanger_matrix_dich_cc_ciego <- ciego_ranger_matrix_cc_fx$byClass["Neg Pred Value"]
+prevalenceRanger_matrix_dich_cc_ciego <- ciego_ranger_matrix_cc_fx$byClass["Prevalence"]
+detection_rateRanger_matrix_dich_cc_ciego <- ciego_ranger_matrix_cc_fx$byClass["Detection Rate"]
+balanced_accuracyRanger_matrix_dich_cc_ciego <- ciego_ranger_matrix_cc_fx$byClass["Balanced Accuracy"]
+
+# Calcular LR+ y LR- que no vienen directamente en confusionMatrix
+LR_plusRanger_matrix_dich_cc_ciego <- sensitivityRanger_matrix_dich_cc_ciego / (1 - specificityRanger_matrix_dich_cc_ciego)
+LR_minusRanger_matrix_dich_cc_ciego <- (1 - sensitivityRanger_matrix_dich_cc_ciego) / specificityRanger_matrix_dich_cc_ciego
+
+# Para manejar valores especiales
+LR_plusRanger_matrix_dich_cc_ciego <- ifelse(is.nan(LR_plusRanger_matrix_dich_cc_ciego) | is.infinite(LR_plusRanger_matrix_dich_cc_ciego), NA, LR_plusRanger_matrix_dich_cc_ciego)
+LR_minusRanger_matrix_dich_cc_ciego <- ifelse(is.nan(LR_minusRanger_matrix_dich_cc_ciego) | is.infinite(LR_minusRanger_matrix_dich_cc_ciego), NA, LR_minusRanger_matrix_dich_cc_ciego)
+
+# Crear un dataframe con todas las métricas
+metricsRanger_matrix_dich_cc_ciego_cv <- data.frame(
+  Metric = c("Accuracy", "Kappa", "Sensitivity", "Specificity", "Precision", 
+             "F1_Score", "NPV", "Prevalence", "Detection_Rate", 
+             "Balanced_Accuracy", "LR+", "LR-", "AUC"),
+  Ranger_matrix_dich_cc_CV  = c(accuracyRanger_matrix_dich_cc_ciego, kappaRanger_matrix_dich_cc_ciego, sensitivityRanger_matrix_dich_cc_ciego, specificityRanger_matrix_dich_cc_ciego, precisionRanger_matrix_dich_cc_ciego, 
+            f1_scoreRanger_matrix_dich_cc_ciego, npvRanger_matrix_dich_cc_ciego, prevalenceRanger_matrix_dich_cc_ciego, detection_rateRanger_matrix_dich_cc_ciego, 
+            balanced_accuracyRanger_matrix_dich_cc_ciego, LR_plusRanger_matrix_dich_cc_ciego, LR_minusRanger_matrix_dich_cc_ciego, AUC_Ranger_matrix_dich_cc_ciego))
+
+# Mostrar los resultados
+print(metricsRanger_matrix_dich_cc_ciego_cv)
+```
+
+
+
+

@@ -1,0 +1,535 @@
+---
+title: "Tesis"
+output: 
+  flexdashboard::flex_dashboard:
+    orientation: columns
+    vertical_layout: fill
+---
+
+```{r setup, include=FALSE}
+library(flexdashboard)
+library(knitr)
+```
+
+
+```{r, include=FALSE}
+library(dplyr)
+ciego_incorporado<- readRDS("ciego_incorporado.rds") 
+ML_tot_batch_no_dico_equipo <- readRDS("ML_tot_batch_no_dico_equipo.rds")
+ML_tot_batch_dico_equipo <- readRDS("ML_tot_batch_dico_equipo.rds")
+
+ML_tot_batch_no_dico_fecha<- readRDS("ML_tot_batch_no_dico_fecha.rds")
+ML_tot_batch_dico_fecha <- readRDS("ML_tot_batch_dico_fecha.rds")
+
+ML_tot_WObatch<- readRDS("ML_tot_WObatch.rds") 
+ML_tot_WObatch_dico<-readRDS("ML_tot_WObatch_dico.rds")
+
+ML_high_batch_dico_equipo<-readRDS("ML_high_batch_dico_equipo.rds")
+ML_high_batch_equipo<-readRDS("ML_high_batch_equipo.rds")
+
+ML_high_batch_dico_fecha<-readRDS("ML_high_batch_dico_fecha.rds")
+ML_high_batch_fecha<-readRDS("ML_high_batch_fecha.rds")
+
+ML_high_WObatch<-readRDS("ML_high_WObatch.rds")
+ML_high_WObatch_dico<-readRDS("ML_high_WObatch_dico.rds")
+
+ML_covid_batch_equipo<-readRDS("ML_covid_batch_equipo.rds")
+ML_covid_batch_dico_equipo<-readRDS("ML_covid_batch_dico_equipo.rds")
+
+ML_covid_batch_fecha<-readRDS("ML_covid_batch_fecha.rds")
+ML_covid_batch_dico_fecha<-readRDS("ML_covid_batch_dico_fecha.rds")
+
+ML_WObatch_covid<-readRDS("ML_WObatch_covid.rds")
+ML_WObatch_covid_dico<-readRDS("ML_WObatch_covid_dico.rds")
+
+ML_cc_batch_dico_equipo<-readRDS("ML_cc_batch_dico_equipo.rds")
+ML_cc_batch_equipo<-readRDS("ML_cc_batch_equipo.rds")
+
+ML_cc_batch_dico_fecha<-readRDS("ML_cc_batch_dico_fecha.rds")
+ML_cc_batch_fecha<-readRDS("ML_cc_batch_fecha.rds")
+
+ML_WObatch_cc<-readRDS("ML_WObatch_cc.rds")
+ML_WObatch_cc_dico<-readRDS("ML_WObatch_cc_dico.rds")
+
+ciego_funcion<-readRDS("ciego_funcion.rds")
+
+load("data_freq_todos_grafico.rda")
+#PRCOMP
+
+load("todos_pca.rda")
+
+#UMAP
+load("combined_plot_UMAP_todos.rda")
+load("combined_plot_UMAP_todos_ajustado.rda")
+#t-SNE
+load("combined_plot_tsne_todos.rda")
+#Importancia de los factores
+load("combined_plot_kruskal_tot.rda")
+
+#Clustering para Identificación de Patrones
+load("g_covid.rda")
+load("g_fecha.rda")
+load("g_equipo.rda")
+
+#Corrección por batch equipo
+load("todos_pca_batch_equipo.rda")
+load("combined_plot_UMAP_combat_todos.rda")
+load("combined_var_combat_todos.rda")
+load("cluster_equipocombat_todos.rda")
+load("cluster_fechacombat_todos.rda")
+load("cluster_covidcombat_todos.rda")
+
+#batch fecha
+load("todos_pca_batch_fecha.rda")
+load("combined_plot_UMAPpost_combatfecha_combat_todos.rda")
+load("combined_var_combat_fecha.rda")
+load("cluster_combatxfecha_todos.rda")
+load("cluster_fechacombatxfecha_todos.rda")
+load("cluster_equipocombatxfecha_todos.rda")
+
+
+
+load("grafico_prueba.rda")  # esto carga el objeto llamado grafico_prueba
+load("data_freq_todos.rda")
+load("todos_pca.rda")
+load("porcentaje_varianza_explicada_prcomp_todos.rda")
+
+```
+
+
+Esquema general {.storyboard data-navmenu=Introducción}
+=======================================================================
+
+### Procesamiento espectros
+
+```{r, fig.width=10, fig.height=7}
+knitr::include_graphics("C:/Users/karin/Desktop/MCD/TESIS/espectros.png")
+```
+
+
+Cantidad de datos/institucion {.storyboard data-navmenu="Analisis exploratorio de datos-EDA"}
+=======================================================================
+
+
+```{r, fig.height=5, fig.width=8}
+data_freq_todos_grafico
+```
+
+
+PCA con PCRCOMP {.storyboard data-navmenu="Analisis exploratorio de datos-EDA"}
+=======================================================================
+
+
+```{r, fig.height=5, fig.width=8}
+todos_pca
+```
+
+
+UMAP {.storyboard data-navmenu="Analisis exploratorio de datos-EDA"}
+=======================================================================
+
+```{r, fig.height=5, fig.width=8}
+combined_plot_UMAP_todos
+```
+
+UMAP ajustado {.storyboard data-navmenu="Analisis exploratorio de datos-EDA"}
+=======================================================================
+
+```{r, fig.height=5, fig.width=8}
+combined_plot_UMAP_todos_ajustado
+```
+
+
+t-SNE {.storyboard data-navmenu="Analisis exploratorio de datos-EDA"}
+======================================================================
+
+```{r, fig.height=5, fig.width=8}
+combined_plot_tsne_todos
+```
+
+Importancia de los factores {.storyboard data-navmenu="Analisis exploratorio de datos-EDA"}
+======================================================================
+
+
+```{r, fig.height=5, fig.width=8}
+combined_plot_kruskal_tot
+```
+
+
+Clustering para Identificación de Patrones {.storyboard data-navmenu="Analisis exploratorio de datos-EDA"}
+======================================================================
+
+### Equipo
+
+```{r, fig.height=5, fig.width=8}
+g_equipo
+```
+
+### Fecha
+
+```{r, fig.height=5, fig.width=8}
+g_fecha
+```
+
+
+
+### COVID
+
+```{r, fig.height=5, fig.width=8}
+g_covid
+```
+
+
+PCA {.storyboard data-navmenu="Corrección Combat por efecto batch equipo"}
+======================================================================
+
+
+```{r, fig.height=5, fig.width=8}
+todos_pca_batch_equipo
+```
+
+UMAP {.storyboard data-navmenu="Corrección Combat por efecto batch equipo"}
+======================================================================
+
+```{r, fig.height=5, fig.width=8}
+combined_plot_UMAP_combat_todos
+```
+
+Importacia factores{.storyboard data-navmenu="Corrección Combat por efecto batch equipo"}
+======================================================================
+
+```{r, fig.height=5, fig.width=8}
+combined_var_combat_todos
+```
+
+Clustering {.storyboard data-navmenu="Corrección Combat por efecto batch equipo"}
+======================================================================
+
+### Equipo
+
+```{r, fig.height=5, fig.width=8}
+cluster_equipocombat_todos
+```
+
+### Fecha
+
+```{r, fig.height=5, fig.width=8}
+cluster_fechacombat_todos 
+```
+
+### COVID
+
+```{r, fig.height=5, fig.width=8}
+cluster_covidcombat_todos  
+```
+
+
+PCA {.storyboard data-navmenu="Corrección Combat por efecto batch fecha"}
+======================================================================
+
+
+```{r, fig.height=5, fig.width=8}
+todos_pca_batch_fecha
+```
+
+UMAP {.storyboard data-navmenu="Corrección Combat por efecto batch fecha"}
+======================================================================
+
+```{r, fig.height=5, fig.width=8}
+combined_plot_UMAPpost_combatfecha_combat_todos
+```
+
+Importacia factores{.storyboard data-navmenu="Corrección Combat por efecto batch fecha"}
+======================================================================
+
+```{r, fig.height=5, fig.width=8}
+combined_var_combat_fecha
+```
+
+Clustering {.storyboard data-navmenu="Corrección Combat por efecto batch fecha"}
+======================================================================
+
+### Equipo
+
+```{r, fig.height=5, fig.width=8}
+cluster_equipocombatxfecha_todos
+```
+
+### Fecha
+
+```{r, fig.height=5, fig.width=8}
+cluster_fechacombatxfecha_todos
+```
+
+
+### COVID
+
+```{r, fig.height=5, fig.width=8}
+cluster_combatxfecha_todos
+```
+
+
+Modelos ML considerando batch equipo  {.storyboard data-navmenu="Matriz completa"}
+=======================================================================
+
+### Sin dicotomizar
+
+
+```{r, echo=FALSE}
+DT::datatable(ML_tot_batch_no_dico_equipo, options = list(pageLength = 100, lengthChange = FALSE, searching = FALSE), rownames = FALSE)
+```
+
+
+### Dicotomizados
+
+
+```{r, echo=FALSE}
+DT::datatable(ML_tot_batch_dico_equipo, options = list(pageLength = 100, lengthChange = FALSE, searching = FALSE), rownames = FALSE)
+```
+
+Modelos ML considerando batch fecha  {.storyboard data-navmenu="Matriz completa"}
+=======================================================================
+
+### Sin dicotomizar
+
+
+```{r, echo=FALSE}
+DT::datatable(ML_tot_batch_no_dico_fecha, options = list(pageLength = 100, lengthChange = FALSE, searching = FALSE), rownames = FALSE)
+```
+
+
+### Dicotomizados
+
+
+```{r, echo=FALSE}
+DT::datatable(ML_tot_batch_dico_fecha, options = list(pageLength = 100, lengthChange = FALSE, searching = FALSE), rownames = FALSE)
+```
+
+
+
+Modelos ML sin efecto batch {.storyboard data-navmenu="Matriz completa"}
+=======================================================================
+
+### Sin dicotomizar
+
+
+```{r, echo=FALSE}
+DT::datatable(ML_tot_WObatch, options = list(pageLength = 100, lengthChange = FALSE, searching = FALSE), rownames = FALSE)
+```
+
+
+### Dicotomizado
+
+
+```{r, echo=FALSE}
+DT::datatable(ML_tot_WObatch_dico, options = list(pageLength = 100, lengthChange = FALSE, searching = FALSE), rownames = FALSE)
+```
+
+
+Modelos ML considerando batch equipo {.storyboard data-navmenu="Matriz sin low"}
+=======================================================================
+
+### Sin dicotomizar
+
+
+```{r, echo=FALSE}
+DT::datatable(ML_high_batch_equipo, options = list(pageLength = 100, lengthChange = FALSE, searching = FALSE), rownames = FALSE)
+```
+
+
+### Dicotomizado
+
+
+```{r, echo=FALSE}
+DT::datatable(ML_high_batch_dico_equipo, options = list(pageLength = 100, lengthChange = FALSE, searching = FALSE), rownames = FALSE)
+```
+
+
+
+Modelos ML considerando batch fecha {.storyboard data-navmenu="Matriz sin low"}
+=======================================================================
+
+### Sin dicotomizar
+
+
+```{r, echo=FALSE}
+DT::datatable(ML_high_batch_fecha, options = list(pageLength = 100, lengthChange = FALSE, searching = FALSE), rownames = FALSE)
+```
+
+
+### Dicotomizado
+
+
+```{r, echo=FALSE}
+DT::datatable(ML_high_batch_dico_fecha, options = list(pageLength = 100, lengthChange = FALSE, searching = FALSE), rownames = FALSE)
+```
+
+
+Modelos ML sin efecto batch {.storyboard data-navmenu="Matriz sin low"}
+=======================================================================
+
+### Sin dicotomizar
+
+
+```{r, echo=FALSE}
+DT::datatable(ML_high_WObatch, options = list(pageLength = 100, lengthChange = FALSE, searching = FALSE), rownames = FALSE)
+```
+
+
+### Dicotomizado
+
+
+```{r, echo=FALSE}
+DT::datatable(ML_high_WObatch_dico, options = list(pageLength = 100, lengthChange = FALSE, searching = FALSE), rownames = FALSE)
+```
+
+
+Modelos ML considerando batch equipo {.storyboard data-navmenu="Matriz solo COVID"}
+=======================================================================
+
+### Sin dicotomizar
+
+
+```{r, echo=FALSE}
+DT::datatable(ML_covid_batch_equipo, options = list(pageLength = 100, lengthChange = FALSE, searching = FALSE), rownames = FALSE)
+```
+
+
+### Dicotomizado
+
+
+```{r, echo=FALSE}
+DT::datatable(ML_covid_batch_dico_equipo, options = list(pageLength = 100, lengthChange = FALSE, searching = FALSE), rownames = FALSE)
+```
+
+
+
+Modelos ML considerando batch fecha {.storyboard data-navmenu="Matriz solo COVID"}
+=======================================================================
+
+### Sin dicotomizar
+
+
+```{r, echo=FALSE}
+DT::datatable(ML_covid_batch_fecha, options = list(pageLength = 100, lengthChange = FALSE, searching = FALSE), rownames = FALSE)
+```
+
+
+### Dicotomizado
+
+
+```{r, echo=FALSE}
+DT::datatable(ML_covid_batch_dico_fecha, options = list(pageLength = 100, lengthChange = FALSE, searching = FALSE), rownames = FALSE)
+```
+
+
+Modelos ML sin batch {.storyboard data-navmenu="Matriz solo COVID"}
+=======================================================================
+
+### Sin dicotomizar
+
+
+```{r, echo=FALSE}
+DT::datatable(ML_WObatch_covid, options = list(pageLength = 100, lengthChange = FALSE, searching = FALSE), rownames = FALSE)
+```
+
+
+### Dicotomizado
+
+
+```{r, echo=FALSE}
+DT::datatable(ML_WObatch_covid_dico, options = list(pageLength = 100, lengthChange = FALSE, searching = FALSE), rownames = FALSE)
+```
+
+
+Modelos ML considerando batch equipo {.storyboard data-navmenu="Matriz covid sin low"}
+====================================================================================
+
+### Sin dicotomizar
+
+
+```{r, echo=FALSE}
+DT::datatable(ML_cc_batch_equipo, options = list(pageLength = 100, lengthChange = FALSE, searching = FALSE), rownames = FALSE)
+```
+
+
+### Dicotomizado
+
+
+```{r, echo=FALSE}
+DT::datatable(ML_cc_batch_dico_equipo, options = list(pageLength = 100, lengthChange = FALSE, searching = FALSE), rownames = FALSE)
+```
+
+
+
+Modelos ML considerando batch fecha{.storyboard data-navmenu="Matriz covid sin low"}
+====================================================================================
+
+### Sin dicotomizar
+
+
+```{r, echo=FALSE}
+DT::datatable(ML_cc_batch_fecha, options = list(pageLength = 100, lengthChange = FALSE, searching = FALSE), rownames = FALSE)
+```
+
+
+### Dicotomizado
+
+
+```{r, echo=FALSE}
+DT::datatable(ML_cc_batch_dico_fecha, options = list(pageLength = 100, lengthChange = FALSE, searching = FALSE), rownames = FALSE)
+```
+
+
+Modelos ML sin efecto batch {.storyboard data-navmenu="Matriz covid sin low"}
+=======================================================================================
+
+
+### Sin dicotomizar
+
+
+```{r, echo=FALSE}
+DT::datatable(ML_WObatch_cc, options = list(pageLength = 100, lengthChange = FALSE, searching = FALSE), rownames = FALSE)
+```
+
+
+### Dicotomizado
+
+
+```{r, echo=FALSE}
+DT::datatable(ML_WObatch_cc_dico, options = list(pageLength = 100, lengthChange = FALSE, searching = FALSE), rownames = FALSE)
+```
+
+
+Alineamiento de espectros {.storyboard data-navmenu="Ciego"}
+========================================================================================
+
+Los modelos seleccionados para enfrentar al set ciego mostraban un equilibrio razonable entre sensibilidad y especificidad, manteniendo valores de Accuracy por encima del 66% y Kappa superiores a 0.25. Además, priorizamos modelos que conservaran especificidad elevada (≥0.72), dado que un diagnóstico correcto de los casos negativos era una prioridad
+
+### Modelos seleccionados
+
+```{r, echo=FALSE}
+DT::datatable(ciego_incorporado, options = list(pageLength = 100, lengthChange = FALSE, searching = FALSE), rownames = FALSE)
+```
+
+Funcion para alinear picos {.storyboard data-navmenu="Ciego"}
+========================================================================================
+
+### Modelos seleccionados/Modelos seleccionados CV<40
+
+```{r, echo=FALSE}
+DT::datatable(ciego_funcion, options = list(pageLength = 100, lengthChange = FALSE, searching = FALSE), rownames = FALSE)
+```
+
+
+
+Modelos con set entrenamiento {.storyboard data-navmenu="Resumen"}
+========================================================================================
+
+### Grafico
+
+```{r, fig.height=5, fig.width=8}
+grafico_prueba
+```
+
+

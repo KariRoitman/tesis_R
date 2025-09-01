@@ -1,0 +1,226 @@
+---
+title: "Optimizacion bayesiana 1er intento"
+author: "Karina Roitman"
+date: "2024-10-06"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+```{r}
+install.packages("lightgbm")
+install.packages("ParBayesianOptimization")
+
+```
+
+
+```{r}
+library(lightgbm)
+library(ParBayesianOptimization)
+
+```
+# Preparar los datos
+
+```{r}
+library(lightgbm)
+
+# Calcular la proporción de clases para balancear los pesos
+negativos <- sum(combat_corrected_dicho$Y == 1)
+positivos <- sum(combat_corrected_dicho$Y == 2)
+weights <- ifelse(combat_corrected_dicho$Y == 2, negativos / positivos, 1)
+
+# Crear matriz de datos
+X <- as.matrix(combat_corrected_dicho[, -which(names(combat_corrected_dicho) == "Y")])
+y <- combat_corrected_dicho$Y
+
+# Dividir en conjunto de entrenamiento y validación
+set.seed(123)
+train_index <- sample(seq_len(nrow(X)), size = 0.8 * nrow(X))
+X_train <- X[train_index, ]
+y_train <- y[train_index]
+X_valid <- X[-train_index, ]
+y_valid <- y[-train_index]
+weights_train <- weights[train_index]
+weights_valid <- weights[-train_index]
+
+# Crear datasets LightGBM
+dtrain <- lgb.Dataset(data = X_train, label = y_train, weight = weights_train)
+dvalid <- lgb.Dataset(data = X_valid, label = y_valid, weight = weights_valid)
+
+```
+
+# Definir la función de optimización
+
+```{r}
+# opt_function <- function(learning_rate, num_leaves, feature_fraction, min_data_in_leaf) {
+#     params <- list(
+#         objective = "binary",
+#         metric = "auc",
+#         learning_rate = learning_rate,
+#         num_leaves = as.integer(num_leaves),
+#         feature_fraction = feature_fraction,
+#         min_data_in_leaf = as.integer(min_data_in_leaf),
+#         feature_pre_filter = FALSE
+#     )
+#     
+#     # Manejo de errores durante el entrenamiento del modelo
+#     tryCatch({
+#         # Entrenar el modelo
+#         model <- lgb.train(
+#             params = params,
+#             data = dtrain,
+#             nrounds = 100,
+#             valids = list(validation = dvalid),
+#             early_stopping_rounds = 10,
+#             verbose = -1
+#         )
+#         
+#         # Obtener la mejor puntuación AUC
+#         best_auc <- max(unlist(model$record_evals$validation$auc))
+#         print(paste("Current AUC:", best_auc))  # Para depuración
+#         return(list(Score = best_auc, Pred = 0))  # Devolver la mejor puntuación
+# 
+#     }, error = function(e) {
+#         message("Error in model training: ", e)
+#         return(list(Score = NA, Pred = 0))  # Devolver NA si hay un error
+#     })
+# }
+
+
+```
+
+```{r}
+opt_function <- function(learning_rate, num_leaves, feature_fraction, min_data_in_leaf) {
+    params <- list(
+        objective = "binary",
+        metric = "auc",
+        learning_rate = learning_rate,
+        num_leaves = as.integer(num_leaves),
+        feature_fraction = feature_fraction,
+        min_data_in_leaf = as.integer(min_data_in_leaf),
+        feature_pre_filter = FALSE
+    )
+    
+    tryCatch({
+        model <- lgb.train(
+            params = params,
+            data = dtrain,
+            nrounds = 100,
+            valids = list(validation = dvalid),
+            early_stopping_rounds = 10,
+            verbose = -1
+        )
+        
+        best_auc <- max(unlist(model$record_evals$validation$auc))
+        return(list(Score = best_auc, Pred = 0)) 
+
+    }, error = function(e) {
+        message("Error in model training: ", e)
+        return(list(Score = 0.5, Pred = 0))  # Devuelve un valor neutro en caso de error
+    })
+}
+
+```
+
+
+
+#Definir los límites de los hiperparámetros
+
+
+```{r}
+# Definir los límites
+bounds <- list(
+    learning_rate = c(0.01, 0.2),
+    num_leaves = c(20L, 200L),
+    feature_fraction = c(0.1, 0.9),
+    min_data_in_leaf = c(10L, 100L)
+)
+
+# Ejecutar la optimización bayesiana
+opt_result <- bayesOpt(
+    FUN = opt_function,
+    bounds = bounds,
+    initPoints = 20,
+    iters.n = 30,
+    acq = "ei",
+    verbose = 1
+)
+
+# Resultados
+print(opt_result$Best_Par)
+print(opt_result$ScoreSummary)
+print(opt_result$stopStatus)
+
+```
+
+```{r}
+opt_result
+```
+
+
+```{r}
+opt_result$scoreSummary
+```
+
+
+```{r}
+getBestPars(opt_result)
+```
+
+
+```{r}
+opt_result$scoreSummary$Score
+
+```
+```{r}
+# Entrenar el modelo con los mejores hiperparámetros
+final_model <- lgb.train(
+    params = list(
+        objective = "binary",
+        metric = "auc",
+        learning_rate = 0.1263945,  # Usar el mejor learning_rate encontrado
+        num_leaves = 51,        # Usar el mejor num_leaves encontrado
+        feature_fraction = 0.3801133,
+        min_data_in_leaf = 12
+    ),
+    data = dtrain,
+    nrounds = 100,
+    valids = list(validation = dvalid),
+    early_stopping_rounds = 10,
+    verbose = -1
+)
+
+```
+
+
+```{r}
+# Predecir en los datos de prueba
+predictions <- predict(final_model, data.matrix(testData[ , -which(names(testData) == "Y")]))
+# Evaluar las predicciones (por ejemplo, calcular la AUC)
+
+```
+
+```{r}
+# Cargar la librería pROC si no la has cargado antes
+library(pROC)
+
+# Asegúrate de que 'Y' en testData esté en el formato adecuado (0/1 o 1/2)
+# Si tus clases son 1 y 2, conviértelo a 0 y 1:
+test_labels <- as.numeric(testData$Y) - 1  # 1 -> 0, 2 -> 1
+
+# Calcular la AUC
+roc_curve <- roc(test_labels, predictions)
+auc_value <- auc(roc_curve)
+
+# Mostrar la AUC
+print(paste("AUC:", auc_value))
+
+```
+```{r}
+# Graficar la curva ROC
+plot(roc_curve, main = "Curva ROC")
+
+```
+
+

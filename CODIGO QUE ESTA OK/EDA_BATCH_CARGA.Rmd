@@ -1,0 +1,2170 @@
+---
+title: "filtroxcarga"
+author: "Karina Roitman"
+output: html_document
+---
+
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+# Objetivos
+
+# 1. Cargar librerias.
+
+rmarkdown como estrategia sintáctica. (En bibliografia hay 2 archivos)
+
+```{r}
+library(rmarkdown)
+```
+
+```{r}
+
+library(stringr)
+?stringr
+library(tidyr)
+?tidyr
+library(dplyr)
+library(openxlsx)
+library(purrr)
+library(broom)
+library(ggplot2)
+library(MALDIquant)
+?MALDIquant
+library(MALDIquantForeign)
+?MALDIquantForeign
+```
+
+```{r}
+getwd()  # Verifica el directorio de trabajo actual
+
+```
+
+```{r}
+setwd("C:/Users/karin/Desktop/MCD/TESIS")
+```
+
+# 2. Cargar datos
+
+```{r}
+load("./Data_Kari/EspectrosINB/Average_ciego.INBIRS.1.rda")
+load("./Data_Kari/EspectrosINB/Average_ciego.INBIRS.2.rda")
+load("./Data_Kari/EspectrosINB/Average_ciego.INBIRS.3.rda")
+load("./Data_Kari/EspectrosINB/Average_ciego.INBIRS.4.rda")
+load("./Data_Kari/EspectrosHC/Average_HC_1.rda")
+load("./Data_Kari/EspectrosHC/Average_HC_2.rda")
+load("./Data_Kari/EspectrosHC/Average_HC_3.rda")
+load("./Data_Kari/EspectrosHC/Average_HC_4.rda")
+load("./Data_Kari/EspectrosHC/Average_HC_5.rda")
+load("./Data_Kari/EspectrosHC/Average_HC_6.rda")
+load("./Data_Kari/Espectros.Malb/Average_ciego.Malbran.1.rda")
+load("./Data_Kari/Espectros.Malb/Average_ciego.Malbran.2.rda")
+load("./Data_Kari/Espectros.Malb/Average_ciego.Malbran.3.rda")
+load("./Data_Kari/EspectrosCR/Average_ciego.Costa.Rica.1.rda")
+load("./Data_Kari/EspectrosCR/Average_ciego.Costa.Rica.3.rda")
+```
+
+# 3. Asigno batch, institucion y equipo
+
+```{r}
+# Listado de tus dataframes
+dataframes <- list(INBIRS.1.df.f.1)
+
+# Usas lapply para agregar las columnas a cada dataframe
+dataframes <- lapply(dataframes, function(df) {
+  df$fecha <- "16_7i"
+  df$institucion <- "inbirs"
+  df$equipo <- "HC"
+  return(df)
+})
+
+# Asignas los dataframes modificados de vuelta a sus nombres originales
+
+INBIRS.1.df.f.1 <- dataframes[[1]]
+```
+
+```{r}
+# Listado de tus dataframes
+dataframes <- list(INBIRS.df.2.f)
+
+# Usas lapply para agregar las columnas a cada dataframe
+dataframes <- lapply(dataframes, function(df) {
+  df$fecha <- "17_7i"
+  df$institucion <- "inbirs"
+  df$equipo <- "HC"
+  return(df)
+})
+
+# Asignas los dataframes modificados de vuelta a sus nombres originales
+
+INBIRS.df.2.f <- dataframes[[1]]
+```
+
+```{r}
+# Listado de tus dataframes
+dataframes <- list(INBIRS.df.3.f)
+
+# Usas lapply para agregar las columnas a cada dataframe
+dataframes <- lapply(dataframes, function(df) {
+  df$fecha <- "13_8i"
+  df$institucion <- "inbirs"
+  df$equipo <- "HC"
+  return(df)
+})
+
+# Asignas los dataframes modificados de vuelta a sus nombres originales
+
+INBIRS.df.3.f <- dataframes[[1]]
+```
+
+```{r}
+# Listado de tus dataframes
+dataframes <- list(Espectros.INBIRS.4.f)
+
+# Usas lapply para agregar las columnas a cada dataframe
+dataframes <- lapply(dataframes, function(df) {
+  df$fecha <- "18_8i"
+  df$institucion <- "inbirs"
+  df$equipo <- "HC"
+  return(df)
+})
+
+# Asignas los dataframes modificados de vuelta a sus nombres originales
+Espectros.INBIRS.4.f<-dataframes[[1]]
+
+```
+
+HC1
+
+```{r}
+# Listado de tus dataframes
+dataframes <- list(Categ.Hospi.1.Neg, Categ.Hospi.1.Pos, Categ.Hospi.2.Cnt, Categ.Hospi.2.Neg, Categ.Hospi.2.No.Covid, Categ.Hospi.2.Pos, Categ.Hospi.3.Neg, Categ.Hospi.3.No.Covid, Categ.Hospi.3.Pos)
+
+# Usas lapply para agregar las columnas a cada dataframe
+dataframes <- lapply(dataframes, function(df) {
+  df$fecha <- "dia1hc"
+  df$institucion <- "HdC"
+  df$equipo <- "HC"
+  return(df)
+})
+
+# Asignas los dataframes modificados de vuelta a sus nombres originales
+
+Categ.Hospi.1.Neg<- dataframes[[1]]
+Categ.Hospi.1.Pos<- dataframes[[2]]
+Categ.Hospi.2.Cnt<- dataframes[[3]]
+Categ.Hospi.2.Neg<- dataframes[[4]]
+Categ.Hospi.2.No.Covid<- dataframes[[5]]
+Categ.Hospi.2.Pos<- dataframes[[6]]
+Categ.Hospi.3.Neg<- dataframes[[7]]
+Categ.Hospi.3.No.Covid<- dataframes[[8]]
+Categ.Hospi.3.Pos<- dataframes[[9]]
+
+```
+
+HC2
+
+```{r}
+dataframes <- list(Categ.Ciego.clin.1.Exp1.covid, Categ.Ciego.clin.1.Exp1.flu)
+
+dataframes <- lapply(dataframes, function(df) {
+  df$fecha <- "dia2hc"
+  df$institucion <- "HdC"
+  df$equipo <- "HC"
+  return(df)
+})
+
+Categ.Ciego.clin.1.Exp1.covid<-dataframes[[1]]
+Categ.Ciego.clin.1.Exp1.flu<-dataframes[[2]]
+```
+
+HC3
+
+```{r}
+dataframes <- list(Categ.Neg.New.clin.1, Categ.Pos.New.clin.1)
+
+dataframes <- lapply(dataframes, function(df) {
+  df$fecha <- "dia3hc"
+  df$institucion <- "HdC"
+  df$equipo <- "HC"
+  return(df)
+})
+
+Categ.Neg.New.clin.1<-dataframes[[1]]
+Categ.Pos.New.clin.1<-dataframes[[2]]
+```
+
+HC4
+
+```{r}
+dataframes <- list(Categ.Ciego.clin25.6.2.covid, Categ.Ciego25.6.clin.2.flu)
+
+dataframes <- lapply(dataframes, function(df) {
+  df$fecha <- "dia4hc"
+  df$institucion <- "HdC"
+  df$equipo <- "HC"
+  return(df)
+})
+
+Categ.Ciego.clin25.6.2.covid<-dataframes[[1]]
+Categ.Ciego25.6.clin.2.flu<-dataframes[[2]]
+```
+
+HC5
+
+```{r}
+dataframes <- list(Categ.Ciego_3_7.4)
+
+dataframes <- lapply(dataframes, function(df) {
+  df$fecha <- "dia5hc"
+  df$institucion <- "HdC"
+  df$equipo <- "HC"
+  return(df)
+})
+
+Categ.Ciego_3_7.4<-dataframes[[1]]
+```
+
+HC6
+
+```{r}
+dataframes <- list(Categ.Ciego_8_7.4)
+
+dataframes <- lapply(dataframes, function(df) {
+  df$fecha <- "dia2hc"
+  df$institucion <- "HdC"
+  df$equipo <- "HC"
+  return(df)
+})
+
+Categ.Ciego_8_7.4<-dataframes[[1]]
+
+```
+
+MALBRAN 1
+
+```{r}
+# Listado de tus dataframes
+dataframes <- list(Categ.Malbran.1.1.1)
+
+# Usas lapply para agregar las columnas a cada dataframe
+dataframes <- lapply(dataframes, function(df) {
+  df$fecha <- "1Malbran"
+  df$institucion <- "Malbran"
+  df$equipo <- "Malbran"
+  return(df)
+})
+
+# Asignas los dataframes modificados de vuelta a sus nombres originales
+
+Categ.Malbran.1.1.1 <- dataframes[[1]]
+```
+
+MALBRAN2
+
+```{r}
+# Listado de tus dataframes
+dataframes <- list(Categ.Malbran.2.1.1)
+
+# Usas lapply para agregar las columnas a cada dataframe
+dataframes <- lapply(dataframes, function(df) {
+  df$fecha <- "2Malbran"
+  df$institucion <- "Malbran"
+  df$equipo <- "Malbran"
+  return(df)
+})
+
+# Asignas los dataframes modificados de vuelta a sus nombres originales
+
+Categ.Malbran.2.1.1 <- dataframes[[1]]
+```
+
+MALBRAN3
+
+```{r}
+# Listado de tus dataframes
+dataframes <- list(Malbran_3_4.1)
+
+# Usas lapply para agregar las columnas a cada dataframe
+dataframes <- lapply(dataframes, function(df) {
+  df$fecha <- "3Malbran"
+  df$institucion <- "Malbran"
+  df$equipo <- "Malbran"
+  return(df)
+})
+
+# Asignas los dataframes modificados de vuelta a sus nombres originales
+
+Malbran_3_4.1 <- dataframes[[1]]
+```
+
+CR1
+
+```{r}
+# Listado de tus dataframes
+dataframes <- list(CostaRica.1.1)
+
+# Usas lapply para agregar las columnas a cada dataframe
+dataframes <- lapply(dataframes, function(df) {
+  df$fecha <- "1CR"
+  df$institucion <- "CR"
+  df$equipo <- "CR"
+  return(df)
+})
+
+# Asignas los dataframes modificados de vuelta a sus nombres originales
+
+CostaRica.1.1 <- dataframes[[1]]
+```
+
+CR2
+
+```{r}
+# Listado de tus dataframes
+dataframes <- list(CostaRica.3.1.1.1)
+
+# Usas lapply para agregar las columnas a cada dataframe
+dataframes <- lapply(dataframes, function(df) {
+  df$fecha <- "2CR"
+  df$institucion <- "CR"
+  df$equipo <- "CR"
+  return(df)
+})
+
+# Asignas los dataframes modificados de vuelta a sus nombres originales
+
+CostaRica.3.1.1.1<- dataframes[[1]]
+
+
+CostaRica.3.1.1.1$PCR.Cov <- CostaRica.3.1.1.1$Virus
+```
+
+# 4. Listado de todos los dataframes
+
+```{r}
+dataframes <- list(INBIRS.1.df.f.1,
+INBIRS.df.2.f,
+INBIRS.df.3.f,
+Espectros.INBIRS.4.f,
+Categ.Hospi.1.Neg,
+Categ.Hospi.1.Pos,
+Categ.Hospi.2.Cnt,
+Categ.Hospi.2.Neg,
+Categ.Hospi.2.No.Covid,
+Categ.Hospi.2.Pos,
+Categ.Hospi.3.Neg,
+Categ.Hospi.3.No.Covid,
+Categ.Hospi.3.Pos,
+Categ.Ciego.clin.1.Exp1.covid,
+Categ.Ciego.clin.1.Exp1.flu,
+Categ.Neg.New.clin.1,
+Categ.Pos.New.clin.1,
+Categ.Ciego.clin25.6.2.covid,
+Categ.Ciego25.6.clin.2.flu,
+Categ.Ciego_3_7.4,
+Categ.Ciego_8_7.4,
+Categ.Malbran.1.1.1,
+Categ.Malbran.2.1.1,
+Malbran_3_4.1,
+CostaRica.1.1,
+CostaRica.3.1.1.1)
+
+
+
+
+# Contar filas para cada dataframe
+filas_count <- sapply(dataframes, nrow)
+
+# Mostrar los resultados
+print(filas_count)
+sum(filas_count)
+```
+
+# 5. Union de todos los espectros
+
+```{r , message=FALSE, echo=FALSE, warning=FALSE, out.width="100%"}
+
+Espec.Union.Clin.Pos.Neg <- c(
+                            Espectros.INBIRS.1,
+                            Espectros.INBIRS.2,
+                            Espectros.INBIRS.3,
+                            Espectros.INBIRS.4,
+                            Espectros.HC.1.Neg,
+                            Espectros.HC.1.HighPos,
+                            Espectros.HC.2.Cnt,
+                            Espectros.HC.2.Neg,
+                            Espectros.HC.2.No.covid,
+                            Espectros.HC.2.IntPos,
+                            Espectros.HC.3.Neg,
+                            Espectros.HC.3.No.covid,
+                            Espectros.HC.3.LowPos,
+                            Espectros.Ciego.Exp1.covid,
+                            Espectros.Ciego.Exp1.flu,
+                            Espectros.Neg.New.Clin,
+                            Espectros.Pos.New.Clin, 
+                            Espectros.Ciego.25.6.covid,
+                            Espectros.Ciego.25.6.flu,
+                            Espectros.Ciego.4.2,
+                            Espectros.Ciego.5,
+                            Espectros.Malbran.24,
+                            Espectros.Malb.2.24,
+                            Espectros.Malb.3_4,
+                            Espectros.CR1,
+                            Espectros.CR3
+                            )
+
+Espectra.1 <- alignSpectra(Espec.Union.Clin.Pos.Neg, halfWindowSize=50, SNR=3, 
+                    tolerance=0.5, warpingMethod="quadratic")
+```
+
+```{r}
+library(purrr)
+```
+
+```{r}
+INBIRS.1.df.f.1<-INBIRS.1.df.f.1[,c(1,6:10)]
+INBIRS.1.df.f.1<-data.frame(purrr::map(INBIRS.1.df.f.1, as.character),
+                               stringsAsFactors = FALSE)
+
+INBIRS.df.2.f<-INBIRS.df.2.f[,c(1,6:10)]
+INBIRS.df.2.f<-data.frame(purrr::map(INBIRS.df.2.f, as.character ),
+                               stringsAsFactors = FALSE)
+
+INBIRS.df.3.f<-INBIRS.df.3.f[,c(1,6:10)]
+INBIRS.df.3.f<-data.frame(purrr::map(INBIRS.df.3.f, as.character ),
+                               stringsAsFactors = FALSE)
+
+
+Espectros.INBIRS.4.f<-Espectros.INBIRS.4.f[,c(1,6:10)]
+Espectros.INBIRS.4.f<-data.frame(purrr::map(Espectros.INBIRS.4.f, as.character ),
+                               stringsAsFactors = FALSE)
+
+Categ.Hospi.1.Neg<- Categ.Hospi.1.Neg[,c(1,5,7,10:12)]
+#Categ.Hospi.1.Neg<- data.frame(map(Categ.Hospi.1.Neg, as.character),
+ #                              stringsAsFactors = FALSE)
+Categ.Hospi.1.Neg<-data.frame(purrr::map(Categ.Hospi.1.Neg, as.character ),
+                              stringsAsFactors = FALSE)
+
+Categ.Hospi.1.Pos<- Categ.Hospi.1.Pos[,c(1,5,7,10:12)]
+Categ.Hospi.1.Pos<-data.frame(purrr::map(Categ.Hospi.1.Pos, as.character ),
+                               stringsAsFactors = FALSE)
+
+Categ.Hospi.2.Cnt<- Categ.Hospi.2.Cnt[,c(1,5,8,11:13)]
+Categ.Hospi.2.Cnt<-data.frame(purrr::map(Categ.Hospi.2.Cnt, as.character ),
+                               stringsAsFactors = FALSE)
+
+Categ.Hospi.2.Neg<- Categ.Hospi.2.Neg[,c(1,5,8,11:13)]
+Categ.Hospi.2.Neg<-data.frame(purrr::map(Categ.Hospi.2.Neg, as.character ),
+                               stringsAsFactors = FALSE)
+
+Categ.Hospi.2.No.Covid<- Categ.Hospi.2.No.Covid[,c(1,5,8,11:13)]
+Categ.Hospi.2.No.Covid<-data.frame(purrr::map(Categ.Hospi.2.No.Covid, as.character ),
+                               stringsAsFactors = FALSE)
+
+Categ.Hospi.2.Pos<- Categ.Hospi.2.Pos[,c(1,5,8,11:13)]
+Categ.Hospi.2.Pos<-data.frame(purrr::map(Categ.Hospi.2.Pos, as.character ),
+                               stringsAsFactors = FALSE)
+
+Categ.Hospi.3.Neg<- Categ.Hospi.3.Neg[,c(1,5,8,11:13)]
+Categ.Hospi.3.Neg<-data.frame(purrr::map(Categ.Hospi.3.Neg, as.character ),
+                               stringsAsFactors = FALSE)
+
+Categ.Hospi.3.No.Covid<- Categ.Hospi.3.No.Covid[,c(1,5,8,11:13)]
+Categ.Hospi.3.No.Covid<-data.frame(purrr::map(Categ.Hospi.3.No.Covid, as.character ),
+                               stringsAsFactors = FALSE)
+
+Categ.Hospi.3.Pos<- Categ.Hospi.3.Pos[,c(1,5,8,11:13)]
+Categ.Hospi.3.Pos<-data.frame(purrr::map(Categ.Hospi.3.Pos, as.character ),
+                               stringsAsFactors = FALSE)
+
+Categ.Ciego.clin.1.Exp1.covid<-Categ.Ciego.clin.1.Exp1.covid[,c(1,6,7,9:11)]
+Categ.Ciego.clin.1.Exp1.covid<-data.frame(purrr::map(Categ.Ciego.clin.1.Exp1.covid, as.character ),
+                               stringsAsFactors = FALSE)
+
+Categ.Ciego.clin.1.Exp1.flu<-Categ.Ciego.clin.1.Exp1.flu[,c(1,6,7,9:11)]
+Categ.Ciego.clin.1.Exp1.flu<-data.frame(purrr::map(Categ.Ciego.clin.1.Exp1.flu, as.character ),
+                               stringsAsFactors = FALSE)
+
+Categ.Neg.New.clin.1<-Categ.Neg.New.clin.1[,c(1,6:10)]
+Categ.Neg.New.clin.1<-data.frame(purrr::map(Categ.Neg.New.clin.1, as.character ),
+                               stringsAsFactors = FALSE)
+
+Categ.Pos.New.clin.1<-Categ.Pos.New.clin.1[,c(1,6:10)]
+Categ.Pos.New.clin.1<-data.frame(purrr::map(Categ.Pos.New.clin.1, as.character ),
+                               stringsAsFactors = FALSE)
+
+Categ.Ciego.clin25.6.2.covid<-Categ.Ciego.clin25.6.2.covid[,c(1,6,7, 9:11)]
+Categ.Ciego.clin25.6.2.covid<-data.frame(purrr::map(Categ.Ciego.clin25.6.2.covid, as.character ),
+                               stringsAsFactors = FALSE)
+
+Categ.Ciego25.6.clin.2.flu<-Categ.Ciego25.6.clin.2.flu[,c(1,6,7, 9:11)]
+Categ.Ciego25.6.clin.2.flu<-data.frame(purrr::map(Categ.Ciego25.6.clin.2.flu, as.character ),
+                               stringsAsFactors = FALSE)
+
+Categ.Ciego_3_7.4<-Categ.Ciego_3_7.4[,c(1,6:10)]
+Categ.Ciego_3_7.4<-data.frame(purrr::map(Categ.Ciego_3_7.4, as.character ),
+                               stringsAsFactors = FALSE)
+
+Categ.Ciego_8_7.4<-Categ.Ciego_8_7.4[,c(1,6:10)]
+Categ.Ciego_8_7.4<-data.frame(purrr::map(Categ.Ciego_8_7.4, as.character ),
+                               stringsAsFactors = FALSE)
+
+
+Categ.Malbran.1.1.1<-Categ.Malbran.1.1.1[,c(1,5:9)]
+Categ.Malbran.1.1.1<-data.frame(purrr::map(Categ.Malbran.1.1.1, as.character ),
+                               stringsAsFactors = FALSE)
+
+Categ.Malbran.2.1.1<-Categ.Malbran.2.1.1[,c(1,5:9)]
+Categ.Malbran.2.1.1<-data.frame(purrr::map(Categ.Malbran.2.1.1, as.character ),
+                               stringsAsFactors = FALSE)
+
+Malbran_3_4.1<-Malbran_3_4.1[,c(1,6:10)]
+Malbran_3_4.1<-data.frame(purrr::map(Malbran_3_4.1, as.character ),
+                               stringsAsFactors = FALSE)
+
+CostaRica.1.1<-CostaRica.1.1[,c(1,6:10)]
+CostaRica.1.1<-data.frame(purrr::map(CostaRica.1.1, as.character ),
+                               stringsAsFactors = FALSE)
+
+CostaRica.1.1$Carga<-as.character(CostaRica.1.1$Carga)
+
+CostaRica.3.1.1.1<-CostaRica.3.1.1.1[,c(1,6:10)]
+CostaRica.3.1.1.1<-data.frame(purrr::map(CostaRica.3.1.1.1, as.character),
+                               stringsAsFactors = FALSE)
+CostaRica.3.1.1.1$Carga<-as.character(CostaRica.3.1.1.1$Carga)
+
+```
+
+```{r}
+dataframes <- list(INBIRS.1.df.f.1,
+INBIRS.df.2.f,
+INBIRS.df.3.f,
+Espectros.INBIRS.4.f,
+Categ.Hospi.1.Neg,
+Categ.Hospi.1.Pos,
+Categ.Hospi.2.Cnt,
+Categ.Hospi.2.Neg,
+Categ.Hospi.2.No.Covid,
+Categ.Hospi.2.Pos,
+Categ.Hospi.3.Neg,
+Categ.Hospi.3.No.Covid,
+Categ.Hospi.3.Pos,
+Categ.Ciego.clin.1.Exp1.covid,
+Categ.Ciego.clin.1.Exp1.flu,
+Categ.Neg.New.clin.1,
+Categ.Pos.New.clin.1,
+Categ.Ciego.clin25.6.2.covid,
+Categ.Ciego25.6.clin.2.flu,
+Categ.Ciego_3_7.4,
+Categ.Ciego_8_7.4,
+Categ.Malbran.1.1.1,
+Categ.Malbran.2.1.1,
+Malbran_3_4.1,
+CostaRica.1.1,
+CostaRica.3.1.1.1)
+
+
+
+
+# Contar filas para cada dataframe
+filas_count <- sapply(dataframes, nrow)
+
+# Mostrar los resultados
+print(filas_count)
+sum(filas_count)
+```
+
+# 6. Union de todos los dataframes
+
+```{r}
+Base.Union.Clinc.Covid <- INBIRS.1.df.f.1 %>%
+  bind_rows(INBIRS.df.2.f) %>%
+  bind_rows(INBIRS.df.3.f) %>%
+  bind_rows(Espectros.INBIRS.4.f) %>%
+bind_rows(Categ.Hospi.1.Neg)%>%
+bind_rows(Categ.Hospi.1.Pos)%>%
+bind_rows(Categ.Hospi.2.Cnt)%>%
+bind_rows(Categ.Hospi.2.Neg)%>%
+bind_rows(Categ.Hospi.2.No.Covid)%>%
+bind_rows(Categ.Hospi.2.Pos)%>%
+bind_rows(Categ.Hospi.3.Neg)%>%
+bind_rows(Categ.Hospi.3.No.Covid)%>%
+bind_rows(Categ.Hospi.3.Pos)%>%
+bind_rows(Categ.Ciego.clin.1.Exp1.covid)%>%
+bind_rows(Categ.Ciego.clin.1.Exp1.flu)%>%
+bind_rows(Categ.Neg.New.clin.1)%>%
+bind_rows(Categ.Pos.New.clin.1)%>%
+bind_rows(Categ.Ciego.clin25.6.2.covid)%>%
+bind_rows(Categ.Ciego25.6.clin.2.flu)%>%
+bind_rows(Categ.Ciego_3_7.4)%>%
+bind_rows(Categ.Ciego_8_7.4)%>%
+bind_rows(Categ.Malbran.1.1.1)%>%
+bind_rows(Categ.Malbran.2.1.1)%>%
+bind_rows(Malbran_3_4.1)%>%
+bind_rows(CostaRica.1.1)%>%
+bind_rows(CostaRica.3.1.1.1)
+```
+
+```{r}
+Espectra.Orig <- data.frame(names(Espectra.1),
+                                  stringsAsFactors = FALSE)
+names(Espectra.Orig)<- c("spot.a.1")
+
+Datos_actualizados<-  Espectra.Orig %>%
+  left_join( Base.Union.Clinc.Covid, by="spot.a.1")
+```
+
+```{r}
+# dev.new()
+# 
+# # Inicializar el gráfico con el primer espectro
+# plot(Espectra.1[[1]], main = "Espectros Superpuestos", col = "blue", type = "l")
+# 
+# # Iterar sobre los espectros restantes y agregarlos al gráfico
+# for (i in 2:length(Espectra.1)) {
+#   lines(Espectra.1[[i]], col = i)  # Añadir líneas para cada espectro, con diferentes colores
+# }
+# 
+# # Añadir una leyenda para indicar los colores de cada espectro
+# legend("topright", legend = 1:length(Espectra.1), col = 1:length(Espectra.1),
+#        title = "Espectros", cex = 0.8)
+```
+
+# fILTRAR POR CARGAS HIGH, INT Y NEGATIVAS
+
+```{r}
+
+cantidad_sd_0_na <- sum(Datos_actualizados$Carga %in% c("SD", "0") | is.na(Datos_actualizados$Carga))
+
+# Mostrar el resultado
+cantidad_sd_0_na
+```
+
+```{r}
+valores_unicos <- unique(Datos_actualizados$Carga)
+print(valores_unicos)
+
+```
+```{r}
+frecuencias <- table(Datos_actualizados$Carga)
+print(frecuencias)
+```
+```{r}
+registros_por_carga <- split(Datos_actualizados, Datos_actualizados$Carga)
+registros_interes <- registros_por_carga[c("High", "Int", "Neg")]
+
+# Imprime los registros agrupados
+print(registros_interes)
+
+```
+
+
+
+# 7. Deteccion y filtrado de picos
+
+```{r , message=FALSE, echo=FALSE, warning=FALSE}
+
+peaks <- detectPeaks(Espectra.1, SNR = 3, 
+                     method="MAD", halfWindowSize=50)
+peaks <- binPeaks(peaks,tolerance=0.5)
+
+species.Ave<-factor(Datos_actualizados$PCR.Cov) 
+spot.factor.Avera<-factor(Datos_actualizados$spot.a.1) 
+
+peaks <- filterPeaks(peaks, minFrequency=c(0.2, 0.2),
+                     labels = species.Ave,
+                     mergeWhitelists=TRUE)
+
+featureMatrix <- intensityMatrix(peaks, Espectra.1)
+```
+
+```{r}
+featureMatrix <- apply(featureMatrix, c(1, 2), function(x) signif(x, digits = 3))
+
+```
+
+
+```{r}
+featureMatrix<- cbind(featureMatrix, label=Datos_actualizados$spot.a.1, covid=Datos_actualizados$PCR.Cov, carga=Datos_actualizados$Carga, dia=Datos_actualizados$batch, equipo=Datos_actualizados$equipo, fecha=Datos_actualizados$fecha, institucion=Datos_actualizados$institucion)
+```
+
+```{r}
+featureMatrix<- as.data.frame(featureMatrix)
+featureMatrix_filtered <- featureMatrix %>%
+  filter(carga %in% c("High", "Int", "Neg"))
+
+```
+
+
+```{r}
+featureMatrix_filtered
+```
+
+
+
+
+
+# 8. EDA
+
+```{r}
+# Filtrar Datos_actualizados por los valores de Carga
+Datos_filtrados <- Datos_actualizados %>%
+  filter(Carga %in% c("High", "Int", "Neg"))
+
+# Crear tabla de frecuencias
+data_freq <- as.data.frame(table(Datos_filtrados$institucion, Datos_filtrados$PCR.Cov))
+colnames(data_freq) <- c("institucion", "covid_status", "frecuencia")
+
+# Gráfico de barras superpuestas
+ggplot(data_freq, aes(x = institucion, y = frecuencia, fill = covid_status)) +
+  geom_bar(stat = "identity", position = "stack") +
+  labs(title = "Frecuencia por Institución",
+       x = "Institución",
+       y = "Frecuencia") +
+  scale_fill_manual(values = c("Cov.Neg" = "blue", "Cov.Pos" = "red")) +
+  theme_minimal()
+
+```
+
+```{r}
+
+print(data_freq)
+```
+
+```{r}
+
+
+Datos_filtrados$id <- 1:nrow(Datos_filtrados)
+Datos_filtrados <- Datos_filtrados[ , c("id", names(Datos_filtrados)[-ncol(Datos_filtrados)])]
+```
+
+
+```{r}
+save(Datos_filtrados, file = "metadata_high_int.rda")
+
+```
+
+# 8. Matriz de intensidades con label
+
+```{r}
+
+# Crear una nueva columna con secuencia del 1 hasta el número de filas
+featureMatrix_filtered<- cbind(id=Datos_filtrados$id, featureMatrix_filtered) 
+```
+
+# 9. Matriz numerica
+
+```{r}
+# Exclude non-numerical columns 
+featureMatrix_numf <- featureMatrix_filtered[, -c(1, (ncol(featureMatrix_filtered)-5):ncol(featureMatrix_filtered))]
+```
+
+```{r}
+featureMatrix_numf <- apply(featureMatrix_numf, 2, function(x) as.numeric(as.character(x)))
+
+```
+
+```{r}
+save(featureMatrix_numf, file = "featureMatrix_high_int.rda")
+
+```
+
+```{r}
+sapply(featureMatrix_numf, class)
+```
+
+```{r}
+class(featureMatrix_numf)
+```
+
+# 10. PCA mixOmics
+
+```{r}
+
+#  install.packages("BiocManager") 
+## install mixOmics 
+#BiocManager::install('mixOmics')
+```
+
+```{r}
+library(mixOmics)
+
+#Performs a principal components analysis on the given data matrix that can contain missing values. If data are complete 'pca' uses Singular Value Decomposition, if there are some missing values, it uses the NIPALS algorithm.
+```
+
+```{r}
+featureMatrix_numf <- apply(featureMatrix_numf, 2, as.numeric)
+
+str(featureMatrix_numf)
+```
+
+```{r}
+?pca
+```
+
+```{r}
+
+pca.before <- pca(featureMatrix_numf, ncomp = 2)   #ncomp=	Integer, if data is complete ncomp decides the number of components and associated eigenvalues to display from the pcasvd algorithm and if the data has missing values, ncomp gives the number of components to keep to perform the reconstitution of the data using the NIPALS algorithm. If NULL, function sets ncomp = min(nrow(X), ncol(X))
+```
+
+```{r}
+#pca.before$institucion <- Datos_actualizados$institucion
+pca.before$fecha <- Datos_filtrados$fecha
+pca.before$equipo <- Datos_filtrados$equipo
+pca.before$covid<- Datos_filtrados$PCR.Cov
+```
+
+```{r}
+pca_coor<-as.data.frame(pca.before$variates$X) # Coordenadas principales obtenidas del PCA
+pca.before$X
+
+```
+
+```{r}
+dim(pca_coor)
+```
+
+```{r}
+colnames(pca.before$variates$X) <- paste0("PC", 1:ncol((pca.before$variates$X)))
+```
+
+```{r}
+library(ggExtra)
+#expl_var <- pca.before$sdev^2 / sum(pca.before$sdev^2)  # Varianza explicada por cada componente
+
+# Crear un gráfico de dispersión con ggplot2
+p <- ggplot(pca_coor, aes(x = PC1, y = PC2, color = pca.before$equipo, shape = pca.before$covid)) +
+  geom_point(size = 3) +  # Tamaño de los puntos
+  labs(title = 'PCA con mixOmics',
+       x = 'PC1: Varianza Explicada',
+       y = 'PC2: Varianza Explicada',
+       color = 'Batch', shape = 'Tratamiento') +
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5))
+
+# Añadir gráficos de densidad marginal con ggExtra
+p_with_density <- ggMarginal(p, type = "density", margins = "both", groupColour = TRUE, groupFill = TRUE)
+
+# Mostrar el gráfico final
+print(p_with_density)
+```
+
+```{r}
+ggplot(pca_coor, aes(x = PC1, y = PC2, color = pca.before$fecha, shape = pca.before$covid))  +
+  geom_point(size = 3) + # Tamaño de los puntos
+  labs(title = "PCA - Componentes Principales",
+       x = "Componente Principal 1",
+       y = "Componente Principal 2") +
+  scale_color_manual(values = c( "red", "blue", "green", "purple", "orange", "pink", "yellow", "cyan", "brown", "magenta", "gray", "black", "darkgreen", "darkblue")) + # Personaliza los colores si es necesario
+  scale_shape_manual(values = c(16, 17)) + # Personaliza las formas si es necesario
+  theme_minimal() # O puedes usar otro tema si prefieres
+```
+
+# 11. PCA con prcomp
+
+```{r}
+# Perform PCA on numerical columns only
+pca_res <- prcomp(featureMatrix_numf, scale. = TRUE)
+
+```
+
+```{r}
+porcentaje_varianza_explicada <- (pca_res$sdev^2) / sum(pca_res$sdev^2) * 100
+
+
+plot(porcentaje_varianza_explicada, type = "b", 
+     xlab = "Componente Principal", 
+     ylab = "Porcentaje de Varianza Explicada",
+     main = "Porcentaje de Varianza Explicada por Componente",
+     xaxt = "n")  # Suprime los valores predeterminados del eje X
+
+# Añadir los números manualmente a lo largo del eje X para todos los componentes
+axis(1, at = 1:length(porcentaje_varianza_explicada), labels = 1:length(porcentaje_varianza_explicada))
+
+```
+
+```{r}
+summary(pca_res)
+```
+
+```{r}
+
+# Now you can add back the categorical data for plotting purposes
+pca_data <- as.data.frame(pca_res$x)
+#pca_data$institucion <- Datos_actualizados$institucion
+pca_data$fecha <- Datos_filtrados$fecha
+pca_data$equipo <- Datos_filtrados$equipo
+pca_data$covid<- Datos_filtrados$PCR.Cov
+
+```
+
+```{r}
+ggplot(pca_data, aes(x = PC1, y = PC2, color = equipo, shape = covid)) +
+  geom_point(size = 3) + # Tamaño de los puntos
+  labs(title = "PCA - Componentes Principales",
+       x = "Componente Principal 1",
+       y = "Componente Principal 2") +
+  scale_color_manual(values = c( "blue", "green", "purple")) + # Personaliza los colores si es necesario
+  scale_shape_manual(values = c(16, 17)) + # Personaliza las formas si es necesario
+  theme_minimal() # O puedes usar otro tema si prefieres
+```
+
+```{r}
+ggplot(pca_data, aes(x = pca_data$PC2, y = pca_data$PC3, color = equipo, shape = covid)) +
+  geom_point(size = 3) + # Tamaño de los puntos
+  labs(title = "PCA - Componentes Principales",
+       x = "Componente Principal 2",
+       y = "Componente Principal 3") +
+  scale_color_manual(values = c( "blue", "green", "purple")) + # Personaliza los colores si es necesario
+  scale_shape_manual(values = c(16, 17)) + # Personaliza las formas si es necesario
+  theme_minimal()
+```
+
+```{r}
+# ggplot(pca_data, aes(x = PC1, y = PC2, color = institucion, shape = covid)) +
+#   geom_point(size = 3) + # Tamaño de los puntos
+#   labs(title = "PCA - Componentes Principales",
+#        x = "Componente Principal 1",
+#        y = "Componente Principal 2") +
+#   scale_color_manual(values = c( "red","blue", "green", "purple")) + # Personaliza los colores si es necesario
+#   scale_shape_manual(values = c(16, 17)) + # Personaliza las formas si es necesario
+#   theme_minimal() # O puedes usar otro tema si prefieres
+```
+
+```{r}
+ggplot(pca_data, aes(x = PC1, y = PC2, color = fecha, shape = covid)) +
+  geom_point(size = 3) + # Tamaño de los puntos
+  labs(title = "PCA - Componentes Principales",
+       x = "Componente Principal 1",
+       y = "Componente Principal 2") +
+  scale_color_manual(values = c( "red", "blue", "green", "purple", "orange", "pink", "yellow", "cyan", "brown", "magenta", "gray", "black", "darkgreen", "darkblue")) +
+  scale_shape_manual(values = c(16, 17)) +
+  theme_minimal()
+
+```
+
+
+```{r}
+ggplot(pca_data, aes(x = PC1, y = PC2, color=covid, shape = covid)) +
+  geom_point(size = 3) + # Tamaño de los puntos
+  labs(title = "PCA - Componentes Principales",
+       x = "Componente Principal 1",
+       y = "Componente Principal 2") +
+ scale_color_manual(values = c( "red","blue"))+
+  scale_shape_manual(values = c(16, 17)) +
+  theme_minimal()
+```
+
+```{r}
+ggplot(pca_data, aes(x = PC1, y = PC3, color=covid, shape = covid)) +
+  geom_point(size = 3) + # Tamaño de los puntos
+  labs(title = "PCA - Componentes Principales",
+       x = "Componente Principal 1",
+       y = "Componente Principal 3") +
+ scale_color_manual(values = c( "red","blue"))+
+  scale_shape_manual(values = c(16, 17)) +
+  theme_minimal()
+```
+
+# 12. UMAP
+
+```{r}
+library(umap)
+set.seed(42)
+umap<-umap(featureMatrix_numf)
+```
+
+```{r}
+
+library(uwot)
+```
+
+```{r}
+set.seed(123)
+umap_result <- umap(featureMatrix_numf)
+```
+
+```{r}
+umap_df <- as.data.frame(umap_result)
+colnames(umap_df) <- c("V1", "V2")
+```
+
+```{r}
+#umap_df$institucion <- Datos_actualizados$institucion
+umap_df$fecha <- Datos_filtrados$fecha
+umap_df$equipo <- Datos_filtrados$equipo
+umap_df$covid<- Datos_filtrados$PCR.Cov
+```
+
+```{r}
+
+ggplot(umap_df, aes(x = V1, y = V2, color = equipo, shape=covid)) +
+  geom_point() +
+  labs(title = "UMAP para Detección de Efectos de Batch", x = "UMAP1", y = "UMAP2") +
+    scale_shape_manual(values = c(16, 17)) +
+  theme_minimal()
+
+```
+
+```{r}
+
+ggplot(umap_df, aes(x = V1, y = V2, color = covid, shape=covid)) +
+  geom_point() +
+  labs(title = "UMAP para Detección de Efecto Batch", x = "UMAP1", y = "UMAP2") +
+    scale_shape_manual(values = c(16, 17)) +
+  theme_minimal()
+
+```
+
+```{r}
+ggplot(umap_df,aes(x = V1, y = V2, color = fecha, shape=covid)) +
+  geom_point(size = 3) + # Tamaño de los puntos
+  labs(title = "UMAP POR FECHA",
+       x = "UMAP 1",
+       y = "UMAP 2") +
+  scale_color_manual(values = c( "red", "blue", "green", "purple", "orange", "pink", "yellow", "cyan", "brown", "magenta", "gray", "black", "darkgreen", "darkblue")) +
+  scale_shape_manual(values = c(16, 17)) +
+  theme_minimal() # O puedes usar otro tema si prefieres
+```
+
+```{r}
+#UMAP intenta encontrar una representación (no lineal) de pocas dimensiones de los datos que preserve las distancias entre cada puntos y sus vecinos en el espacio multi-dimensional
+
+#Comparison among PCA, t-SNE and UMAP : https://aurigait.com/blog/blog-easy-explanation-of-dimensionality-reduction-and-techniques/
+
+
+
+library(umap)
+
+
+# Ajustar parámetros directamente en la función umap
+umap_v2 <- umap(featureMatrix_numf, n_neighbors = 5, metric = "cosine", min_dist = 0.1)
+
+# Verificar la estructura del objeto umap_v2
+str(umap_v2) # Esto te mostrará la estructura para asegurarte de que layout es un componente válido.
+
+# Si la estructura es correcta, continuar con la conversión a dataframe
+umap_coor2 <- as.data.frame(umap_v2)
+
+# Asignar nombres de columnas
+colnames(umap_coor2) <- c("UMAP1", "UMAP2")
+
+# Añadir las columnas con los metadatos (COVID, equipo, etc.)
+umap_coor2$covid <- Datos_filtrados$PCR.Cov
+umap_coor2$equipo <- Datos_filtrados$equipo
+
+# Graficar UMAP con ggplot2
+library(ggplot2)
+ggplot(umap_coor2, aes(x = UMAP1, y = UMAP2, color = equipo, shape = covid)) +
+  geom_point(size = 3) +
+  labs(title = "UMAP para Detección de Efecto Batch",
+       x = "UMAP1",
+       y = "UMAP2") +
+  theme_minimal()
+
+
+```
+
+```{r}
+
+# 
+# ggplot(umap_df, aes(x = V1, y = V2, color = institucion, shape=covid)) +
+#   geom_point() +
+#   labs(title = "UMAP para Detección de Efectos de Batch", x = "UMAP1", y = "UMAP2") +
+#     scale_shape_manual(values = c(16, 17)) +
+#   theme_minimal()
+
+```
+
+```{r}
+# Ajustar parámetros directamente en la función umap
+umap_v3 <- umap2(featureMatrix_numf)
+
+# Verificar la estructura del objeto umap_v2
+str(umap_v3) # Esto te mostrará la estructura para asegurarte de que layout es un componente válido.
+
+# Si la estructura es correcta, continuar con la conversión a dataframe
+umap_coor3 <- as.data.frame(umap_v3)
+
+# Asignar nombres de columnas
+colnames(umap_coor3) <- c("UMAP1", "UMAP2")
+
+# Añadir las columnas con los metadatos (COVID, equipo, etc.)
+umap_coor3$covid <- Datos_filtrados$PCR.Cov
+umap_coor3$equipo <- Datos_filtrados$equipo
+
+# Graficar UMAP con ggplot2
+library(ggplot2)
+ggplot(umap_coor3, aes(x = UMAP1, y = UMAP2, color = equipo, shape = covid)) +
+  geom_point(size = 3) +
+  labs(title = "UMAP para Detección de Efecto Batch",
+       x = "UMAP1",
+       y = "UMAP2") +
+  theme_minimal()
+
+
+```
+
+# 13. t-SNE
+
+```{r}
+#tsne
+library(Rtsne)
+library(ggplot2)
+library(readxl)
+library(RColorBrewer)
+```
+
+```{r}
+?Rtsne
+```
+
+```{r}
+set.seed(9)
+tsne_model <- Rtsne(featureMatrix_numf, check_duplicates=FALSE, 
+                      pca=TRUE, perplexity=30, theta=0.5, dims=2)
+```
+
+```{r}
+#tsne_model$institucion <- Datos_actualizados$institucion
+tsne_model$fecha <- Datos_filtrados$fecha
+tsne_model$equipo <- Datos_filtrados$equipo
+tsne_model$covid<- Datos_filtrados$PCR.Cov
+```
+
+```{r}
+tsne_data <- as.data.frame(tsne_model$Y)
+colnames(tsne_data) <- c("Dim1", "Dim2")
+```
+
+```{r}
+#tsne_data$institucion <- Datos_actualizados$institucion
+tsne_data$fecha <- Datos_filtrados$fecha
+tsne_data$equipo <- Datos_filtrados$equipo
+tsne_data$covid<- Datos_filtrados$PCR.Cov
+```
+
+```{r}
+ggplot(tsne_data, aes(x=Dim1, y=Dim2, color=equipo)) +
+  geom_point(size=1, alpha=0.7) +
+  ggtitle("t-SNE Visualization by Batch") +
+  theme_minimal(base_size=15) +
+  scale_color_manual(values=c("#D32F2F", "#1976D2", "#388E3C"))  # Use a color palette
+```
+
+
+
+
+```{r}
+library(dplyr)
+# Convertir las variables categóricas en factores
+Datos_filtrados <- Datos_filtrados[,c(2:7)] %>%
+  mutate(across(c(PCR.Cov, fecha, equipo), as.factor))
+
+# Convertir la matriz de datos a una matriz numérica si aún no lo es
+featureMatrix_numf <- as.matrix(featureMatrix_numf)
+
+```
+
+```{r}
+# Prueba de normalidad
+shapiro.test(pca.before$X[, 1])
+
+# Prueba de homocedasticidad
+library(car)
+leveneTest(pca.before$X[, 1] ~ Datos_filtrados$PCR.Cov)
+
+```
+
+```{r}
+# Inicializar un dataframe para almacenar los resultados
+shapiro_results <- data.frame(Componente = integer(), PValue = numeric(), stringsAsFactors = FALSE)
+
+# Iterar sobre cada componente principal
+for (i in 1:ncol(pca.before$X)) {
+  p_value <- shapiro.test(pca.before$X[, i])$p.value
+  shapiro_results <- rbind(shapiro_results, data.frame(Componente = i, PValue = p_value))
+}
+
+# Visualizar los resultados
+print(shapiro_results)
+
+```
+
+# 15. Kruskal wallis para detectar el peso de cada factor en el efecto batch
+
+```{r}
+# Cargar librerías necesarias
+library(ggplot2)
+library(dplyr)
+
+# 1. Realizar PCA
+pca_result <- prcomp(featureMatrix_numf, scale. = TRUE)
+
+# 2. Obtener las puntuaciones de los componentes principales
+pca_scores <- pca_result$x
+
+# 3. Agregar los resultados PCA al dataframe de metadatos
+metadata_pca <- cbind(Datos_filtrados[,c(3:6)], pca_scores)
+
+# 4. Función para realizar Kruskal-Wallis sobre los componentes principales
+kruskal_pca <- function(pca_scores, metadata, factor) {
+  results <- data.frame()
+  for (i in 1:ncol(pca_scores)) {  # Para cada componente principal
+    pca_component <- pca_scores[, i]  # Extraer la puntuación del componente
+    model <- kruskal.test(pca_component ~ metadata[[factor]])  # Realizar la prueba de Kruskal-Wallis
+    factor_effect <- model$p.value  # Obtener el p-valor
+    results <- rbind(results, data.frame(PC = i, Factor = factor, PValue = factor_effect))  # Guardar resultados
+  }
+  return(results)
+}
+
+# 5. Lista de factores que quieres analizar
+factors <- c("PCR.Cov", "fecha", "equipo")
+
+# Ejecutar la función para cada factor y combinar los resultados
+kruskal_results <- do.call(rbind, lapply(factors, function(f) kruskal_pca(pca_scores, Datos_filtrados, f)))
+
+# 6. Resumir el p-valor medio para cada factor
+factor_summary <- kruskal_results %>%
+  group_by(Factor) %>%
+  summarise(MeanPValue = mean(PValue))
+
+# 7. Visualizar los resultados en un gráfico de barras
+ggplot(factor_summary, aes(x = reorder(Factor, MeanPValue), y = MeanPValue, fill = Factor)) +
+  geom_bar(stat = "identity") +
+  coord_flip() +
+  theme_minimal() +
+  labs(title = "Importancia de los Factores en el Efecto Batch",
+       x = "Factor",
+       y = "P-valor Medio",
+       fill = "Factor")
+```
+
+# 16. Kruskal wallis para detectar el peso de cada factor en el efecto batch en analisis de UMAP
+
+```{r}
+# Prueba de normalidad Shapiro-Wilk en la primera dimensión de UMAP
+shapiro.test(umap_v3[, 1])
+
+# Prueba de normalidad Shapiro-Wilk en la segunda dimensión de UMAP
+shapiro.test(umap_v3[, 2])
+
+
+```
+
+```{r}
+
+umap_scores <- umap_v3  # Tomar el resultado de UMAP directamente
+
+# Luego sigues con el mismo análisis
+metadata_umap <- cbind(Datos_filtrados[,c(3,4,6)], umap_scores)
+
+# Función para realizar Kruskal-Wallis sobre las dimensiones de UMAP
+kruskal_umap <- function(umap_scores, metadata, factor) {
+  results <- data.frame()
+  for (i in 1:ncol(umap_scores)) {  # Para cada dimensión de UMAP
+    umap_component <- umap_scores[, i]  # Extraer la puntuación de la dimensión
+    model <- kruskal.test(umap_component ~ metadata[[factor]])  # Realizar la prueba de Kruskal-Wallis
+    factor_effect <- model$p.value  # Obtener el p-valor
+    results <- rbind(results, data.frame(UMAP_Dim = i, Factor = factor, PValue = factor_effect))  # Guardar resultados
+  }
+  return(results)
+}
+
+# Lista de factores que quieres analizar
+factors <- c("PCR.Cov", "fecha", "equipo")
+
+# Ejecutar la función para cada factor y combinar los resultados
+kruskal_results_umap <- do.call(rbind, lapply(factors, function(f) kruskal_umap(umap_scores, Datos_filtrados, f)))
+
+# Resumir el p-valor medio para cada factor
+factor_summary_umap <- kruskal_results_umap %>%
+  group_by(Factor) %>%
+  summarise(MeanPValue = mean(PValue))
+
+# Visualizar los resultados en un gráfico de barras
+ggplot(factor_summary_umap, aes(x = reorder(Factor, MeanPValue), y = MeanPValue, fill = Factor)) +
+  geom_bar(stat = "identity") +
+  coord_flip() +
+  theme_minimal() +
+  labs(title = "Importancia de los Factores en el Efecto Batch (UMAP)",
+       x = "Factor",
+       y = "P-valor Medio",
+       fill = "Factor")
+
+```
+
+# 17.PVCA
+
+```{r}
+#PVCA combina PCA y ANOVA (análisis de varianza) para descomponer la varianza total en componentes atribuibles a diferentes factores (variables categóricas o continuas). Esto permite medir la proporción de la varianza atribuible a diferentes fuentes.
+
+library(lme4)
+library(ggplot2)
+
+# Function to perform PVCA
+perform_pvca <- function(featureMatrix_numf, Datos_filtrados, factors_to_analyze) {
+  print("Starting PVCA analysis...")
+  
+  # Check inputs
+  if (!is.matrix(featureMatrix_numf) || !is.numeric(featureMatrix_numf)) {
+    stop("featureMatrix_num must be a numeric matrix")
+  }
+  if (!is.data.frame(Datos_filtrados)) {
+    stop("Datos_actualizados must be a data frame")
+  }
+  if (!all(factors_to_analyze %in% names(Datos_filtrados))) {
+    stop("Not all factors_to_analyze are present in Datos_filtrados")
+  }
+  if (nrow(featureMatrix_numf) != nrow(Datos_filtrados)) {
+    stop("Number of rows in featureMatrix_num and Datos_actualizados must be the same")
+  }
+  
+  # Perform PCA
+  print("Performing PCA...")
+  pca_result <- prcomp(featureMatrix_numf, scale. = TRUE)
+  
+  # Calculate proportion of variance explained by each PC
+  var_prop <- pca_result$sdev^2 / sum(pca_result$sdev^2)
+  
+  # Initialize results matrix
+  n_factors <- length(factors_to_analyze)
+  n_pcs <- ncol(pca_result$x)
+  vc_matrix <- matrix(0, nrow = n_factors, ncol = n_pcs)
+  
+  # Perform variance component analysis for each PC
+  print("Performing variance component analysis...")
+  for (i in 1:n_pcs) {
+    pc_data <- data.frame(PC = pca_result$x[, i], Datos_filtrados)
+    
+    # Create formula for mixed model
+    formula <- as.formula(paste("PC ~", paste("(1|", factors_to_analyze, ")", collapse = " + ")))
+    
+    # Fit mixed model
+    tryCatch({
+      mixed_model <- lmer(formula, data = pc_data, REML = TRUE)
+      
+      # Extract variance components
+      vc <- as.data.frame(VarCorr(mixed_model))
+      vc_matrix[, i] <- vc$vcov[1:n_factors]
+    }, error = function(e) {
+      warning(paste("Error in PC", i, ":", e$message))
+    })
+  }
+  
+  # Weight the variance components by the proportion of variance explained
+  weighted_vc <- vc_matrix %*% diag(var_prop)
+  
+  # Calculate the proportion of variance explained by each factor
+  pvca_results <- rowSums(weighted_vc) / sum(var_prop)
+  names(pvca_results) <- factors_to_analyze
+  
+  print("PVCA analysis completed.")
+  return(pvca_results)
+}
+
+# Function to plot PVCA results
+plot_pvca <- function(pvca_results) {
+  print("Creating PVCA plot...")
+  results_df <- data.frame(
+    Factor = names(pvca_results),
+    Proportion = pvca_results
+  )
+  
+  p <- ggplot(results_df, aes(x = reorder(Factor, -Proportion), y = Proportion)) +
+    geom_bar(stat = "identity", fill = "steelblue") +
+    theme_minimal() +
+    labs(x = "Factors", y = "Proportion of Variance Explained", 
+         title = "Principal Variance Component Analysis") +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1))
+  
+  print(p)
+  print("Plot created.")
+}
+
+# Usage with your existing data:
+print("Preparing to run PVCA with your data...")
+
+# Asumiendo que ya tiene featureMatrix_num y Datos_actualizados
+# Reemplace 'sus_factores' con los nombres reales de sus factores
+factors_to_analyze <- c('PCR.Cov', 'equipo', 'fecha')  # Por ejemplo: c("Factor1", "Factor2", "Factor3")
+
+print("Running PVCA...")
+results <- perform_pvca(featureMatrix_numf, Datos_filtrados, factors_to_analyze)
+print("PVCA Results:")
+print(results)
+
+print("Creating plot...")
+plot_pvca(results)
+
+print("Script execution completed.")
+```
+
+```{r}
+help("isSingular")
+```
+
+```{r}
+dim(featureMatrix_num)
+dim(Datos_actualizados)
+```
+
+```{r}
+require(dplyr)
+require(tibble)
+require(ggplot2)
+```
+## FactoExtra
+
+```{r}
+
+library(factoextra)
+library(FactoMineR)
+
+```
+
+```{r}
+# Realiza el PCA
+pca_result <- PCA(featureMatrix_numf, scale.unit = TRUE, graph = FALSE)
+
+# Resumen del PCA
+summary(pca_result)
+
+```
+```{r}
+# Scree plot
+fviz_eig(pca_result)
+
+```
+
+```{r}
+
+
+# Gráfico de individuos
+fviz_pca_ind(pca_result,
+             label = "none", # No muestra las etiquetas de las muestras
+             habillage = Datos_filtrados$PCR.Cov, # Variable para colorear
+             addEllipses = TRUE, # Añade elipses de confianza
+             ellipse.level = 0.95) # Nivel de confianza
+
+```
+
+```{r}
+
+
+# Gráfico de individuos
+fviz_pca_ind(pca_result,
+             label = "none", # No muestra las etiquetas de las muestras
+             habillage = Datos_filtrados$equipo, # Variable para colorear
+             addEllipses = TRUE, # Añade elipses de confianza
+             ellipse.level = 0.95) # Nivel de confianza
+
+```
+
+
+##Clustering
+
+
+
+```{r}
+library(dendextend)
+
+distancias <- dist(featureMatrix_numf)
+
+# Realizar el clustering jerárquico
+hc <- hclust(distancias, method = "ward.D2")
+
+# Convierte el dendrograma a un objeto de dendextend
+dend <- as.dendrogram(hc)
+
+# Crea un vector de colores basado en PCR.cov
+# Cambia "PCR.cov" a la columna adecuada de Datos_actualizados
+label_colors <- as.factor(Datos_filtrados$PCR.Cov)
+palette <- c("red", "blue") # Cambia los colores si hay más de 2 categorías
+label_colors <- palette[label_colors]
+
+# Aplica los colores a las etiquetas
+dend <- dend %>%
+  set("labels_col", label_colors) %>%
+  set("labels_cex", 0.5) # Ajusta el tamaño de las etiquetas
+
+# Dibuja el dendrograma
+plot(dend, main = "Dendrograma por resultado COVID")
+legend("topright",           # Posición de la leyenda
+       legend = c("COVID Negativo", "COVID Positivo"), # Textos de la leyenda
+       fill = c("red", "blue"),                        # Colores de la leyenda
+       border = "black",                               # Borde de las cajas de color
+       bty = "n",                                      # Sin caja alrededor de la leyenda
+       cex = 0.8)    
+
+```
+
+
+```{r}
+table(Datos_filtrados$PCR.Cov, label_colors)
+
+```
+
+
+ 
+```{r}
+library(dendextend)
+library(factoextra)
+
+# Filtrar las muestras positivas (COV.POS)
+indices_cov_pos <- Datos_filtrados$PCR.Cov == "Cov.Pos"
+featureMatrix_cov_pos <- featureMatrix_numf[indices_cov_pos, ]
+Datos_actualizados_cov_pos <- Datos_filtrados[indices_cov_pos, ]
+
+# Verificar que los datos estén filtrados correctamente
+dim(featureMatrix_cov_pos)
+table(Datos_actualizados_cov_pos$equipo)
+
+
+# Realizar el clustering jerárquico
+dist_featureMatriz_cov_pos <- dist(featureMatrix_cov_pos)
+hc_cov_pos <- hclust(dist_featureMatriz_cov_pos, method = "ward.D2")
+
+# Convertir a dendrograma para personalizar
+dend_cov_pos <- as.dendrogram(hc_cov_pos)
+
+# Crear un vector de colores para las etiquetas basado en 'equipo'
+equipo_factor <- as.factor(Datos_actualizados_cov_pos$equipo)
+palette <- rainbow(length(levels(equipo_factor))) # Paleta de colores
+label_colors <- palette[equipo_factor]
+
+# Personalizar el dendrograma
+dend_cov_pos <- dend_cov_pos %>%
+  set("labels_col", label_colors) %>%  # Colorea las etiquetas por 'equipo'
+  set("labels_cex", 0.6)               # Ajusta el tamaño de las etiquetas
+
+# Visualizar el dendrograma
+plot(dend_cov_pos, main = "Clustering de Positivos Diferenciado por Equipo")
+legend("topright", legend = levels(equipo_factor), col = palette, pch = 19, title = "Equipo")
+
+```
+
+
+ 
+ 
+```{r}
+library(dendextend)
+library(factoextra)
+
+# Filtrar las muestras positivas (COV.POS)
+indices_cov_neg <- Datos_filtrados$PCR.Cov == "Cov.Neg"
+featureMatrix_cov_neg <- featureMatrix_numf[indices_cov_neg, ]
+Datos_actualizados_cov_neg <- Datos_filtrados[indices_cov_neg, ]
+
+# Verificar que los datos estén filtrados correctamente
+dim(featureMatrix_cov_neg)
+table(Datos_actualizados_cov_neg$equipo)
+
+# Realizar el clustering jerárquico
+dist_featureMatriz_cov_neg <- dist(featureMatrix_cov_neg)
+hc_cov_neg <- hclust(dist_featureMatriz_cov_neg, method = "ward.D2")
+
+# Convertir a dendrograma para personalizar
+dend_cov_neg <- as.dendrogram(hc_cov_neg)
+
+# Crear un vector de colores para las etiquetas basado en 'equipo'
+equipo_factor <- as.factor(Datos_actualizados_cov_neg$equipo)
+palette <- rainbow(length(levels(equipo_factor))) # Paleta de colores
+label_colors <- palette[equipo_factor]
+
+# Personalizar el dendrograma
+dend_cov_neg <- dend_cov_neg %>%
+  set("labels_col", label_colors) %>%  # Colorea las etiquetas por 'equipo'
+  set("labels_cex", 0.6)               # Ajusta el tamaño de las etiquetas
+
+# Visualizar el dendrograma
+plot(dend_cov_neg, main = "Clustering de Negativos Diferenciado por Equipo")
+legend("topright", legend = levels(equipo_factor), col = palette, pch = 19, title = "Equipo")
+
+```
+ 
+
+
+
+ 
+```{r}
+
+# Extraer solo las filas que corresponden a los equipos en featureMatrix_num
+# Asegúrate de que Datos_actualizados$equipo tenga valores válidos para subindexar.
+featureMatrix_equipo <- featureMatrix_numf
+
+# Verificar que los datos estén filtrados correctamente
+table(Datos_filtrados$equipo)
+
+# Calcular la matriz de distancias y realizar el clustering jerárquico
+dist_featureMatriz_eq <- dist(featureMatrix_equipo)
+hc_eq <- hclust(dist_featureMatriz_eq, method = "ward.D2")
+
+# Convertir a dendrograma para personalizar
+dend_eq <- as.dendrogram(hc_eq)
+
+# Crear un vector de colores para las etiquetas basado en 'equipo'
+equipo_factor <- as.factor(Datos_filtrados$equipo)
+palette <- rainbow(length(levels(equipo_factor))) # Paleta de colores
+label_colors <- palette[equipo_factor]           # Asignar colores por equipo
+
+# Personalizar el dendrograma
+dend_eq <- dend_eq %>%
+  set("labels_col", label_colors) %>%  # Colorea las etiquetas por 'equipo'
+  set("labels_cex", 0.6)               # Ajusta el tamaño de las etiquetas
+
+# Visualizar el dendrograma
+plot(dend_eq, main = "Clustering Diferenciado por Equipo")
+legend("topright", legend = levels(equipo_factor), col = palette, pch = 19, title = "Equipo")
+
+
+```
+```{r}
+
+
+Datos_filtrados$fecha <- as.factor(Datos_filtrados$fecha)
+
+# Matriz de características (featureMatrix_num)
+featureMatrix_fecha <- featureMatrix_numf
+
+# Calcular la matriz de distancias y realizar el clustering jerárquico
+dist_featureMatriz_fecha <- dist(featureMatrix_fecha)
+hc_fecha <- hclust(dist_featureMatriz_fecha, method = "ward.D2")
+
+# Convertir a dendrograma para personalizar
+dend_fecha <- as.dendrogram(hc_fecha)
+
+# Crear un vector de colores para las etiquetas basado en 'fecha'
+fecha_factor <- Datos_filtrados$fecha
+palette <- rainbow(length(levels(fecha_factor))) # Paleta de colores
+label_colors <- palette[fecha_factor]           # Asignar colores por fecha
+
+# Personalizar el dendrograma
+dend_fecha <- dend_fecha %>%
+  set("labels_col", label_colors) %>%  # Colorea las etiquetas por 'fecha'
+  set("labels_cex", 0.6)               # Ajusta el tamaño de las etiquetas
+
+# Visualizar el dendrograma
+library(RColorBrewer)
+
+# Crear una paleta más contrastante
+num_colores <- length(levels(fecha_factor))
+palette <- brewer.pal(n = min(num_colores, 12), name = "Paired") # Máx. 12 colores contrastantes
+if (num_colores > 12) {
+  palette <- colorRampPalette(brewer.pal(12, "Paired"))(num_colores) # Extender paleta si es necesario
+}
+
+# Aplicar los nuevos colores
+label_colors <- palette[fecha_factor]
+
+# Personalizar el dendrograma
+dend_fecha <- dend_fecha %>%
+  set("labels_col", label_colors) %>%
+  set("labels_cex", 0.6)
+
+# Dibujar el dendrograma
+plot(dend_fecha, main = "Clustering Diferenciado por Fecha")
+legend(
+  "topright",
+  legend = levels(fecha_factor),
+  col = palette,
+  pch = 19,
+  title = "Fecha",
+  cex = 0.7,
+  bty = "n"
+)
+
+
+```
+
+
+ 
+ 
+# 18.Correcion efecto batch: Combat
+
+```{r}
+# Cargar el paquete sva
+library(sva)
+
+```
+
+```{r}
+# Ejemplo de datos de entrada
+data_matrix <- featureMatrix_numf  # Tu matriz de datos
+metadata <- Datos_filtrados    # Dataframe de metadatos con información de batch
+batch_info <- metadata$equipo      # Vector con la información de batch
+
+```
+
+```{r}
+# Verificar si 'batch_info' es un factor o un vector de caracteres
+str(batch_info)
+
+# Si es necesario, convertirlo a un factor
+batch_info <- factor(batch_info)
+
+
+```
+
+```{r}
+sum(is.na(data_matrix))  # Revisa si hay valores NA en la matriz
+
+```
+
+
+
+```{r}
+
+combat_corrected_equipo_carga <- ComBat(
+  dat = t(data_matrix),             # Matriz de intensidades con las muestras en filas
+  batch = batch_info,            # Información de batch
+  par.prior = TRUE,
+  prior.plots = FALSE
+)
+
+
+
+```
+
+
+
+```{r}
+# Transponer de vuelta los datos corregidos
+combat_corrected_equipo_carga <- t(combat_corrected_equipo_carga)
+
+# Guardar la matriz corregida
+write.csv(combat_corrected_equipo_carga, "corrected_featureMatrix.csv")
+
+```
+
+
+```{r}
+save(combat_corrected_equipo_carga, file = "correccion_combat_equipo_high_int.rda")
+
+```
+
+```{r}
+# Asignar colores manualmente en función de batch_info
+batch_colors <- as.factor(batch_info)   # Convertir batch_info a factor
+levels(batch_colors)  # Ver los niveles de batch_info
+
+# Definir colores manualmente (puedes cambiar los nombres de niveles y colores)
+col_vector <- batch_colors
+levels(col_vector) <- c("red", "blue", "green")  # Asigna colores a cada batch
+```
+
+```{r}
+equipo_colors <- as.factor(metadata$equipo)  # Convertir 'equipo' a factor
+
+# Asignar colores
+palette_colors <- rainbow(length(unique(equipo_colors)))  # Colores únicos
+col_vector <- palette_colors[equipo_colors]
+```
+
+```{r}
+pca_after <- prcomp(combat_correctedf, scale. = TRUE)
+
+# Plot PCA después de la corrección
+plot(pca_after$x[,1:2], col = col_vector, main = "PCA después de la corrección")
+legend("topright", 
+       legend = levels(batch_colors), 
+       col = palette_colors, 
+       pch = 16, 
+       title = "Batch")
+```
+
+```{r}
+library(lme4)
+library(ggplot2)
+
+# Función para realizar PVCA en los datos corregidos
+perform_pvca <- function(combat_correctedf, Datos_filtrados, factors_to_analyze) {
+  print("Starting PVCA analysis...")
+
+  # Comprobaciones de entrada
+  if (!is.matrix(combat_correctedf) || !is.numeric(combat_correctedf)) {
+    stop("combat_corrected must be a numeric matrix")
+  }
+  if (!is.data.frame(Datos_filtrados)) {
+    stop("Datos_actualizados must be a data frame")
+  }
+  if (!all(factors_to_analyze %in% names(Datos_filtrados))) {
+    stop("Not all factors_to_analyze are present in Datos_actualizados")
+  }
+  if (nrow(combat_correctedf) != nrow(Datos_filtrados)) {
+    stop("Number of rows in combat_corrected and Datos_actualizados must be the same")
+  }
+  
+  # Realizar PCA sobre los datos corregidos por ComBat
+  print("Performing PCA on ComBat corrected data...")
+  pca_result <- prcomp(combat_correctedf, scale. = TRUE)
+  
+  # Calcular proporción de varianza explicada por cada componente
+  var_prop <- pca_result$sdev^2 / sum(pca_result$sdev^2)
+  
+  # Inicializar la matriz de resultados
+  n_factors <- length(factors_to_analyze)
+  n_pcs <- ncol(pca_result$x)
+  vc_matrix <- matrix(0, nrow = n_factors, ncol = n_pcs)
+  
+  # Realizar análisis de componentes de varianza para cada PC
+  print("Performing variance component analysis...")
+  for (i in 1:n_pcs) {
+    pc_data <- data.frame(PC = pca_result$x[, i], Datos_filtrados)
+    
+    # Crear fórmula para el modelo mixto
+    formula <- as.formula(paste("PC ~", paste("(1|", factors_to_analyze, ")", collapse = " + ")))
+    
+    # Ajustar el modelo mixto
+    tryCatch({
+      mixed_model <- lmer(formula, data = pc_data, REML = TRUE)
+      
+      # Extraer componentes de varianza
+      vc <- as.data.frame(VarCorr(mixed_model))
+      vc_matrix[, i] <- vc$vcov[1:n_factors]
+    }, error = function(e) {
+      warning(paste("Error in PC", i, ":", e$message))
+    })
+  }
+  
+  # Ponderar los componentes de varianza por la proporción de varianza explicada
+  weighted_vc <- vc_matrix %*% diag(var_prop)
+  
+  # Calcular la proporción de varianza explicada por cada factor
+  pvca_results <- rowSums(weighted_vc) / sum(var_prop)
+  names(pvca_results) <- factors_to_analyze
+  
+  print("PVCA analysis completed.")
+  return(pvca_results)
+}
+
+# Función para graficar los resultados de PVCA
+plot_pvca <- function(pvca_results) {
+  print("Creating PVCA plot...")
+  results_df <- data.frame(
+    Factor = names(pvca_results),
+    Proportion = pvca_results
+  )
+  
+  p <- ggplot(results_df, aes(x = reorder(Factor, -Proportion), y = Proportion)) +
+    geom_bar(stat = "identity", fill = "steelblue") +
+    theme_minimal() +
+    labs(x = "Factors", y = "Proportion of Variance Explained", 
+         title = "Principal Variance Component Analysis After ComBat") +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1))
+  
+  print(p)
+  print("Plot created.")
+}
+
+# Ejecución del PVCA sobre los datos corregidos
+print("Preparing to run PVCA after ComBat correction...")
+
+# Asegúrate de que `combat_corrected` (matriz corregida) y `Datos_actualizados` estén disponibles
+# Los factores a analizar son los mismos que antes
+factors_to_analyze <- c('PCR.Cov', 'equipo', 'fecha')
+
+print("Running PVCA on ComBat corrected data...")
+combatf_pvca_results <- perform_pvca(combat_correctedf, Datos_filtrados, factors_to_analyze)
+
+print("PVCA Results after ComBat:")
+print(combatf_pvca_results)
+
+print("Creating plot for PVCA results after ComBat...")
+plot_pvca(combatf_pvca_results)
+
+print("Script execution completed.")
+
+
+```
+
+
+
+
+
+```{r}
+library(umap)
+
+
+# Ajustar parámetros directamente en la función umap
+umap_v4 <- umap(combat_correctedf, n_neighbors = 15, metric = "cosine", min_dist = 0.1)
+
+# Verificar la estructura del objeto umap_v2
+str(umap_v4) # Esto te mostrará la estructura para asegurarte de que layout es un componente válido.
+
+# Si la estructura es correcta, continuar con la conversión a dataframe
+umap_coor4 <- as.data.frame(umap_v4)
+
+# Asignar nombres de columnas
+colnames(umap_coor4) <- c("UMAP1", "UMAP2")
+
+# Añadir las columnas con los metadatos (COVID, equipo, etc.)
+umap_coor4$covid <- Datos_filtrados$PCR.Cov
+umap_coor4$equipo <- Datos_filtrados$equipo
+
+# Graficar UMAP con ggplot2
+library(ggplot2)
+ggplot(umap_coor4, aes(x = UMAP1, y = UMAP2, color = equipo, shape = covid)) +
+  geom_point(size = 3) +
+  labs(title = "UMAP luego de corrección por COMBAT",
+       x = "UMAP1",
+       y = "UMAP2") +
+  theme_minimal()
+```
+
+
+
+```{r}
+
+umap_scores <- umap_v4  # Tomar el resultado de UMAP directamente
+
+# Luego sigues con el mismo análisis
+metadata_umap <- cbind(Datos_filtrados[,c(3,4,6)], umap_scores)
+
+# Función para realizar Kruskal-Wallis sobre las dimensiones de UMAP
+kruskal_umap <- function(umap_scores, metadata, factor) {
+  results <- data.frame()
+  for (i in 1:ncol(umap_scores)) {  # Para cada dimensión de UMAP
+    umap_component <- umap_scores[, i]  # Extraer la puntuación de la dimensión
+    model <- kruskal.test(umap_component ~ metadata[[factor]])  # Realizar la prueba de Kruskal-Wallis
+    factor_effect <- model$p.value  # Obtener el p-valor
+    results <- rbind(results, data.frame(UMAP_Dim = i, Factor = factor, PValue = factor_effect))  # Guardar resultados
+  }
+  return(results)
+}
+
+# Lista de factores que quieres analizar
+factors <- c("PCR.Cov", "fecha", "equipo")
+
+# Ejecutar la función para cada factor y combinar los resultados
+kruskal_results_umap <- do.call(rbind, lapply(factors, function(f) kruskal_umap(umap_scores, Datos_filtrados, f)))
+
+# Resumir el p-valor medio para cada factor
+factor_summary_umap <- kruskal_results_umap %>%
+  group_by(Factor) %>%
+  summarise(MeanPValue = mean(PValue))
+
+# Visualizar los resultados en un gráfico de barras
+ggplot(factor_summary_umap, aes(x = reorder(Factor, MeanPValue), y = MeanPValue, fill = Factor)) +
+  geom_bar(stat = "identity") +
+  coord_flip() +
+  theme_minimal() +
+  labs(title = "Importancia de los Factores en el Efecto Batch (UMAP) despues de COMBAT",
+       x = "Factor",
+       y = "P-valor Medio",
+       fill = "Factor")
+
+```
+
+
+
+
+
+```{r}
+# Cargar el paquete sva
+library(sva)
+
+```
+
+```{r}
+# Ejemplo de datos de entrada
+data_matrix <- featureMatrix_numf  # Tu matriz de datos
+metadata <- Datos_filtrados    # Dataframe de metadatos con información de batch
+batch_info <- metadata$fecha      # Vector con la información de batch
+
+```
+
+```{r}
+# Verificar si 'batch_info' es un factor o un vector de caracteres
+str(batch_info)
+
+# Si es necesario, convertirlo a un factor
+batch_info <- factor(batch_info)
+
+
+```
+
+```{r}
+sum(is.na(data_matrix))  # Revisa si hay valores NA en la matriz
+
+```
+
+
+
+```{r}
+
+combat_corrected_fecha_carga <- ComBat(
+  dat = t(data_matrix),             # Matriz de intensidades con las muestras en filas
+  batch = batch_info,            # Información de batch
+  par.prior = TRUE,
+  prior.plots = FALSE
+)
+
+
+
+```
+
+
+
+```{r}
+# Transponer de vuelta los datos corregidos
+combat_corrected_fecha_carga <- t(combat_corrected_fecha_carga)
+
+# Guardar la matriz corregida
+write.csv(combat_corrected_fecha_carga, "corrected_featureMatrix.csv")
+
+```
+
+
+```{r}
+save(combat_corrected_fecha_carga, file = "correccion_combat_fecha_high_int.rda")
+
+```
+
+
+
+
+
+#En ComBat, el argumento modcombat (o mod) contiene la matriz de diseño que representa las variables de interés que deseas preservar durante la corrección por batch.
+#combat_corrected2
+
+```{r}
+modcombat <- model.matrix(~ equipo, data = Datos_filtrados)
+
+```
+
+```{r}
+is.vector(batch_info)
+```
+
+
+```{r}
+combat_corrected_fechaequipo <- ComBat(
+  dat = t(data_matrix),         # Matriz de intensidades
+  batch = batch_info,    # Variable batch (por ejemplo, equipos)
+  mod = modcombat,
+  par.prior = FALSE,
+  prior.plots = FALSE# Modelo que incluye PCR.Cov
+)
+
+```
+
+         
+```{r}
+# Transponer de vuelta los datos corregidos
+combat_corrected2f <- t(combat_corrected2f)
+
+# Guardar la matriz corregida
+write.csv(combat_corrected2f, "corrected_featureMatrix.csv")
+
+```
+
+```{r}
+# Asignar colores manualmente en función de batch_info
+batch_colors <- as.factor(batch_info)   # Convertir batch_info a factor
+levels(batch_colors)  # Ver los niveles de batch_info
+
+# Definir colores manualmente (puedes cambiar los nombres de niveles y colores)
+col_vector <- batch_colors
+levels(col_vector) <- c("red", "blue", "green")  # Asigna colores a cada batch
+```
+
+```{r}
+equipo_colors <- as.factor(metadata$equipo)  # Convertir 'equipo' a factor
+
+# Asignar colores
+palette_colors <- rainbow(length(unique(equipo_colors)))  # Colores únicos
+col_vector <- palette_colors[equipo_colors]
+```
+
+```{r}
+pca_after2 <- prcomp(combat_corrected2f, scale. = TRUE)
+
+# Plot PCA después de la corrección
+plot(pca_after2$x[,1:2], col = col_vector, main = "PCA después de la corrección")
+legend("topright", 
+       legend = levels(batch_colors), 
+       col = palette_colors, 
+       pch = 16, 
+       title = "Batch")
+```
+
+
+```{r}
+library(umap)
+
+
+# Ajustar parámetros directamente en la función umap
+umap_v5 <- umap(combat_corrected2f, n_neighbors = 15, metric = "cosine", min_dist = 0.1)
+
+# Verificar la estructura del objeto umap_v2
+str(umap_v5) # Esto te mostrará la estructura para asegurarte de que layout es un componente válido.
+
+# Si la estructura es correcta, continuar con la conversión a dataframe
+umap_coor5 <- as.data.frame(umap_v5)
+
+# Asignar nombres de columnas
+colnames(umap_coor5) <- c("UMAP1", "UMAP2")
+
+# Añadir las columnas con los metadatos (COVID, equipo, etc.)
+umap_coor5$covid <- Datos_filtrados$PCR.Cov
+umap_coor5$equipo <- Datos_filtrados$equipo
+
+# Graficar UMAP con ggplot2
+library(ggplot2)
+ggplot(umap_coor5, aes(x = UMAP1, y = UMAP2, color = equipo, shape = covid)) +
+  geom_point(size = 3) +
+  labs(title = "UMAP luego de corrección por COMBAT",
+       x = "UMAP1",
+       y = "UMAP2") +
+  theme_minimal()
+```
+
+
+
+```{r}
+
+umap_scores <- umap_v5  # Tomar el resultado de UMAP directamente
+
+# Luego sigues con el mismo análisis
+metadata_umap <- cbind(Datos_filtrados[,c(3,4,6)], umap_scores)
+
+# Función para realizar Kruskal-Wallis sobre las dimensiones de UMAP
+kruskal_umap <- function(umap_scores, metadata, factor) {
+  results <- data.frame()
+  for (i in 1:ncol(umap_scores)) {  # Para cada dimensión de UMAP
+    umap_component <- umap_scores[, i]  # Extraer la puntuación de la dimensión
+    model <- kruskal.test(umap_component ~ metadata[[factor]])  # Realizar la prueba de Kruskal-Wallis
+    factor_effect <- model$p.value  # Obtener el p-valor
+    results <- rbind(results, data.frame(UMAP_Dim = i, Factor = factor, PValue = factor_effect))  # Guardar resultados
+  }
+  return(results)
+}
+
+# Lista de factores que quieres analizar
+factors <- c("PCR.Cov", "fecha", "equipo")
+
+# Ejecutar la función para cada factor y combinar los resultados
+kruskal_results_umap <- do.call(rbind, lapply(factors, function(f) kruskal_umap(umap_scores, Datos_filtrados, f)))
+
+# Resumir el p-valor medio para cada factor
+factor_summary_umap <- kruskal_results_umap %>%
+  group_by(Factor) %>%
+  summarise(MeanPValue = mean(PValue))
+
+# Visualizar los resultados en un gráfico de barras
+ggplot(factor_summary_umap, aes(x = reorder(Factor, MeanPValue), y = MeanPValue, fill = Factor)) +
+  geom_bar(stat = "identity") +
+  coord_flip() +
+  theme_minimal() +
+  labs(title = "Importancia de los Factores en el Efecto Batch (UMAP) despues de COMBAT",
+       x = "Factor",
+       y = "P-valor Medio",
+       fill = "Factor")
+
+```

@@ -1,0 +1,399 @@
+---
+title: "COMBAT_CORRECTED"
+author: "Karina Roitman"
+date: "2024-12-22"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(MALDIquant)
+library(MALDIquantForeign)
+library(readBrukerFlexData)
+library(ggplot2)
+library(caret)
+library(stats)
+library(binda)
+library(factoextra)
+library(binda)
+library(dplyr)
+library(crossval)
+library(ggrepel)
+library(corrr)
+library(ggplot2)
+library(FactoMineR)
+```
+
+
+
+# Modelos (con datos combat_corrected POR EQUIPO dicotomizado)
+
+
+
+
+
+
+```{r}
+#combat_corrected_equipo_cc_tot<- cbind(combat_corrected_equipo_cc, Y=Datos_actualizados$PCR.Cov)#1=neg,2=pos
+```
+# 
+```{r}
+# combat_corrected_equipo_cc_tot<-as.data.frame(combat_corrected_equipo_cc_tot)
+# combat_corrected_equipo_cc_tot$Y<-as.factor(combat_corrected_equipo_cc_tot$Y)
+# str(combat_corrected_equipo_cc_tot)
+```
+
+
+
+```{r}
+library(dplyr)
+
+#combat_corrected_equipo_cc_tot <- combat_corrected_equipo_cc_tot %>% rename(Y = label)
+str(combat_corrected_equipo_cc_tot$Y)
+```
+```{r}
+# combat_corrected_equipo_nodico_cc<-combat_corrected_equipo_cc_tot[1:227,]
+# 
+# ciego_combat_corrected_no_dico_equipo_cc<-combat_corrected_equipo_cc_tot[228:311,]
+```
+
+```{r}
+
+library(tidymodels)
+# set.seed asegura reproducibilidad
+set.seed(42)
+
+#Utilizo tidymodels para dividir de manera proporcional
+
+split_data <- initial_split(combat_corrected_equipo_cc_tot, strata = "Y", prop = 0.8)
+
+# Obtener los conjuntos de entrenamiento y prueba
+trainData_equipo <- training(split_data)
+testData_equipo <- testing(split_data)
+
+# Ver la distribución de clases en ambos conjuntos
+table(trainData_equipo$Y)
+table(testData_equipo$Y)
+
+#trainIndex <- createDataPartition(combat_corrected_dicho[, 18], p = 0.8, list = FALSE)
+
+
+```
+
+
+```{r}
+trainData_equipo_dico<-as.data.frame(trainData_equipo)
+trainData_equipo_dico$Y<-as.factor(trainData_equipo_dico$Y)
+str(trainData_equipo_dico)
+```
+
+```{r}
+#trainData_equipo_dico<-trainData_equipo_dico[1:ncol(trainData_equipo_dico)-1]
+```
+
+
+
+
+
+```{r}
+train_subset <- trainData_equipo_dico[,-ncol(trainData_equipo_dico)]
+```
+
+
+
+```{r}
+labels <- trainData_equipo_dico$Y
+
+#Definir número de bootstraps
+n_boot <- 10
+set.seed(123)
+
+#Inicializar lista para guardar umbrales
+thresholds_list <- vector("list", n_boot)
+
+#  Ejecutar bootstrap
+for (i in 1:n_boot) {
+  sample_indices <- sample(1:nrow(train_subset), replace = TRUE)
+  sampled_data <- train_subset[sample_indices, ]
+  sampled_labels <- labels[sample_indices]
+
+  thresholds <- optimizeThreshold(sampled_data, sampled_labels)
+  thresholds_list[[i]] <- thresholds
+}
+
+# Unir todos los umbrales en un data frame
+thresholds_df <- do.call(rbind, thresholds_list)
+
+# Calcular el CV de cada pico
+cv_thresholds <- apply(thresholds_df, 2, function(x) {
+  media <- mean(x, na.rm = TRUE)
+  sd <- sd(x, na.rm = TRUE)
+  if (media == 0) return(Inf) else return((sd / media) * 100)
+})
+
+#Seleccionar los picos con CV < 40 (estables)
+picos_estables <- names(cv_thresholds[cv_thresholds < 40])
+
+#  Filtrar la matriz original para quedarte solo con esos picos
+train_subset <- train_subset[, picos_estables]
+
+#  Volver a combinar con la variable Y
+#train_subset_fecha$Y <- labels
+```
+
+
+
+
+
+
+
+
+```{r}
+# Filtrar el df de thresholds para los picos estables
+thresholds_estables <- thresholds_df[, picos_estables, drop = FALSE]
+
+# Calcular la media por columna (pico)
+thr <- colMeans(thresholds_estables, na.rm = TRUE)
+
+# Mostrar
+print(thr)
+
+```
+
+
+
+
+```{r}
+#Dicotimizacion de la matriz de intensidad
+
+train_subset <- dichotomize(train_subset, thr) #2 MATRIZ DE INTENSIDAD DICOTOMIZADA
+train_subset<-as.data.frame(train_subset)
+```
+
+```{r}
+trainData_equipo_dico<- cbind(train_subset, trainData_equipo_dico$Y)#1=neg,2=pos
+```
+
+
+```{r}
+library(dplyr)
+trainData_equipo_dico<-as.data.frame(trainData_equipo_dico)
+trainData_equipo_dico <- trainData_equipo_dico %>% rename(Y = ncol(trainData_equipo_dico))
+str(trainData_equipo_dico$Y)
+```
+
+```{r}
+trainData_equipo_dico<-as.data.frame(trainData_equipo_dico)
+trainData_equipo_dico<- cbind(train_subset, trainData_equipo_dico$Y)#1=neg,2=pos
+trainData_equipo_dico <- trainData_equipo_dico %>% rename(Y = ncol(trainData_equipo_dico))
+```
+
+
+
+```{r}
+str(trainData_equipo_dico)
+trainData_equipo_dico<-as.data.frame(trainData_equipo_dico)
+```
+
+
+
+
+
+
+
+
+
+
+
+```{r}
+zero_var_indices <- caret::nearZeroVar(trainData_equipo_dico[,1:ncol(trainData_equipo_dico)-1])
+str(zero_var_indices)
+if (length(zero_var_indices) > 0) {
+    trainData_equipo_dico <- trainData_equipo_dico[, -zero_var_indices]
+}
+
+```
+
+#quedaron 35 variables
+
+```{r}
+train_subset<-trainData_equipo_dico[,-ncol(trainData_equipo_dico)]
+thr_filtered <- thr[colnames(trainData_equipo_dico[,-ncol(trainData_equipo_dico)])]
+```
+
+
+KNN
+
+```{r}
+# Submuestras y repeticiones
+set.seed(42)
+# particiones  <- 5
+# repeticiones <- 15
+particiones <- 3
+repeticiones <- 5
+```
+
+```{r}
+tuneGrid <- expand.grid(k = 1:15)
+# Seeds
+seed.rf <- 42
+set.seed(seed.rf)
+
+seeds <- vector(mode = "list", length = (particiones * repeticiones) + 1)
+
+for (i in 1:(particiones * repeticiones)) {
+  seeds[[i]] <- sample.int(500, nrow(tuneGrid)) 
+}
+
+seeds[[(particiones * repeticiones) + 1]] <- sample.int(500, 1)
+
+# Training control
+```
+
+
+
+```{r}
+# Training control
+
+cross_val_knn <- trainControl(
+  method = "repeatedcv",
+  number = particiones,
+  repeats = repeticiones,
+  returnResamp = "final",
+  verboseIter = FALSE,
+  allowParallel = TRUE,
+  classProbs = TRUE,
+  seeds = seeds)
+```
+
+
+```{r}
+KNN_equipo_cc_fx <- function(df_train, model, grid, metrica = "Accuracy", control, preProcess) {
+
+  
+  # Entrenar el modelo
+  KNN_equipo_dic <- caret::train(
+    Y ~ .,
+    data = df_train,
+    method = model,
+    tuneGrid = grid,
+    metric = metrica,
+    trControl = control,
+    preProcess = preProcess
+  )
+  
+  # Mostrar resumen
+  print(KNN_equipo_dic)
+  plot(KNN_equipo_dic, main = title)
+  
+  # Guardar resultado
+  #save(KNN_equipo, file = paste0(title, ".rda"))
+  
+  return(KNN_equipo_dic)
+}
+
+
+trainData_equipo_dico$Y <- factor(trainData_equipo_dico$Y)
+levels(trainData_equipo_dico$Y) <- make.names(levels(trainData_equipo_dico$Y))
+
+KNN_equipo_dic<-KNN_equipo_cc_fx(df_train=trainData_equipo_dico, model="knn", grid=tuneGrid, metrica="Accuracy", preProcess = c("center","scale"), control=cross_val_knn )
+print(KNN_equipo_dic)
+
+```
+
+
+
+#CIEGO
+
+```{r}
+
+
+
+ciego_data <- as.data.frame(featureMatrix_ciegos_total)
+ciego_data<- ciego_data[, colnames(trainData_equipo_dico)]
+# Si viene con columna Y (conocida), separala:
+if ("Y" %in% colnames(ciego_data)) {
+  Y_ciego <- ciego_data$Y
+  X_ciego <- ciego_data[, setdiff(colnames(ciego_data), "Y")]
+} else {
+  X_ciego <- ciego_data
+  Y_ciego <- NULL
+}
+
+
+X_ciego <- dichotomize(X_ciego, thr)
+X_ciego<-as.data.frame(X_ciego)
+Y_ciego<-as.factor(Y_ciego)
+```
+
+
+```{r}
+# Predicciones (clase)
+predicciones_ciego_knn_cc_fx <- predict(KNN_equipo_dic, newdata = X_ciego)
+levels(predicciones_ciego_knn_cc_fx) <- c("Cov.Neg", "Cov.Pos")
+
+# Predicciones (probabilidades)
+prob_ciego <- predict(KNN_equipo_dic, newdata = X_ciego, type = "prob")
+#prob_ciego$Cov.Neg<-prob_ciego$X1
+#prob_ciego$Cov.Pos<-prob_ciego$X2
+
+
+levels(predicciones_ciego_knn_cc_fx) <- c("Cov.Neg", "Cov.Pos")
+levels(Y_ciego) <- c("Cov.Neg", "Cov.Pos")
+
+
+
+  # Confusion matrix
+  ciego_knn_equipo_dic_cc<-caret::confusionMatrix(predicciones_ciego_knn_cc_fx, Y_ciego, positive = "Cov.Pos")
+
+  # AUC
+  library(pROC)
+  Y_ciego_num <- as.numeric(Y_ciego)
+  roc_ciego <- roc(Y_ciego_num, prob_ciego[, "X2"])
+  plot(roc_ciego, main = "ROC en Datos Ciegos", col = "darkgreen", lwd = 2)
+  AUC_KNN_equipo_dic_CC_ciego<-auc(roc_ciego)
+  
+  
+  accuracyKNN_equipo_dic_CC_ciego <- ciego_knn_equipo_dic_cc$overall["Accuracy"]
+kappaKNN_equipo_dic_CC_ciego <- ciego_knn_equipo_dic_cc$overall["Kappa"]
+# Métricas por clase
+sensitivityKNN_equipo_dic_CC_ciego <- ciego_knn_equipo_dic_cc$byClass["Sensitivity"]
+specificityKNN_equipo_dic_CC_ciego <- ciego_knn_equipo_dic_cc$byClass["Specificity"]
+precisionKNN_equipo_dic_CC_ciego <- ciego_knn_equipo_dic_cc$byClass["Pos Pred Value"]
+recallKNN_equipo_dic_CC_ciego <- ciego_knn_equipo_dic_cc$byClass["Sensitivity"]  # Igual a sensitivity
+f1_scoreKNN_equipo_dic_CC_ciego <- ciego_knn_equipo_dic_cc$byClass["F1"]
+npvKNN_equipo_dic_CC_ciego <- ciego_knn_equipo_dic_cc$byClass["Neg Pred Value"]
+prevalenceKNN_equipo_dic_CC_ciego <- ciego_knn_equipo_dic_cc$byClass["Prevalence"]
+detection_rateKNN_equipo_dic_CC_ciego <- ciego_knn_equipo_dic_cc$byClass["Detection Rate"]
+balanced_accuracyKNN_equipo_dic_CC_ciego <- ciego_knn_equipo_dic_cc$byClass["Balanced Accuracy"]
+
+# Calcular LR+ y LR- que no vienen directamente en confusionMatrix
+LR_plusKNN_equipo_dic_CC_ciego <- sensitivityKNN_equipo_dic_CC_ciego / (1 - specificityKNN_equipo_dic_CC_ciego)
+LR_minusKNN_equipo_dic_CC_ciego <- (1 - sensitivityKNN_equipo_dic_CC_ciego) / specificityKNN_equipo_dic_CC_ciego
+
+# Para manejar valores especiales
+LR_plusKNN_equipo_dic_CC_ciego <- ifelse(is.nan(LR_plusKNN_equipo_dic_CC_ciego) | is.infinite(LR_plusKNN_equipo_dic_CC_ciego), NA, LR_plusKNN_equipo_dic_CC_ciego)
+LR_minusKNN_equipo_dic_CC_ciego <- ifelse(is.nan(LR_minusKNN_equipo_dic_CC_ciego) | is.infinite(LR_minusKNN_equipo_dic_CC_ciego), NA, LR_minusKNN_equipo_dic_CC_ciego)
+
+# Crear un dataframe con todas las métricas
+metricsKNN_equipo_dic_cc_ciego_cv <- data.frame(
+  Metric = c("Accuracy", "Kappa", "Sensitivity", "Specificity", "Precision", 
+             "F1_Score", "NPV", "Prevalence", "Detection_Rate", 
+             "Balanced_Accuracy", "LR+", "LR-", "AUC"),
+  KNN_equipo_dic_cc_cv = c(accuracyKNN_equipo_dic_CC_ciego, kappaKNN_equipo_dic_CC_ciego, sensitivityKNN_equipo_dic_CC_ciego, specificityKNN_equipo_dic_CC_ciego, precisionKNN_equipo_dic_CC_ciego, 
+            f1_scoreKNN_equipo_dic_CC_ciego, npvKNN_equipo_dic_CC_ciego, prevalenceKNN_equipo_dic_CC_ciego, detection_rateKNN_equipo_dic_CC_ciego, 
+            balanced_accuracyKNN_equipo_dic_CC_ciego, LR_plusKNN_equipo_dic_CC_ciego, LR_minusKNN_equipo_dic_CC_ciego, AUC_KNN_equipo_dic_CC_ciego))
+
+# Mostrar los resultados
+print(metricsKNN_equipo_dic_cc_ciego_cv)
+```
+
+
+
+
+
+
+

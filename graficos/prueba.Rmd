@@ -1,0 +1,97 @@
+---
+title: "Resultados_Kari"
+output: 
+  flexdashboard::flex_dashboard:
+    orientation: rows
+    vertical_layout: fill
+    storyboard: true
+---
+
+```{r setup, include=FALSE}
+library(flexdashboard)
+library(DT)
+library(kableExtra)
+```
+
+
+```{r}
+setwd("C:/Users/karin/Desktop/MCD/TESIS")
+```
+
+```{r}
+library(here)
+
+rf_dico <- readRDS("rf_dico.rds")
+rf_nodico <- readRDS("rf_nodico.rds")
+glm_dico <- readRDS("glm_dico.rds")
+glm_nodico <- readRDS("glm_nodico.rds")
+glm_nodico <- readRDS("df_plot_filtrado.rds")
+getwd()
+```
+
+```{r}
+# SÓLO FUNCIONA PARA ARCHIVOS .R
+# source("9-EDA_BATCH - CV.RMD")
+# source("10-CombatCorrected -CV.R")
+# source("11-CombatCorrectedFECHA - CV.R")
+# source("12-MODELOS_SIN_CORRECCION - CV.R")
+# source("13-EDA_BATCH - CV sin otros virus.R")
+# source("14-CombatCorrected -CV sin otros virus.R")
+# source("15-CombatCorrectedFECHA - CV sin otros virus.R")
+# source("16-MODELOS_SIN_CORRECCION - CV sin otros virus.R")
+# source("17-EDA_BATCH_CV_high_int.R")
+# source("18-CombatCorrected_equipo_CV_high_int.R")
+# source("19-CombatCorrectedFECHA_CV_high_int.R")
+# source("20-MODELOS_SIN_CORRECCION_cv_high_int.R")
+# source("21-EDA_BATCH_CV_sin otros virus_high_int.R")
+# source("22-CombatCorrected_EQUIPO_sin otros virus_high_int.R")
+# source("23-CombatCorrectedFECHA_CV_sin otros virus_high_int.R")
+# source("24-MODELOS_SIN_CORRECCION_CV_sin otros virus_high_int.R")
+# source("25-Resultados.R")
+```
+
+
+# Metodología {data-navmenu="Introduction"}
+```{r}
+
+# Graficar
+ggplot(df_plot_filtrado, aes(x = Algorithm, y = value, color = Tipo)) +
+  geom_point(position = position_jitter(width = 0.15), alpha = 0.8, size = 2) +
+  facet_wrap(~ Metric, scales = "free_y") +
+  theme_minimal() +
+  labs(
+    title = "Performance de las metricas por algoritmo y dicotomizacion",
+    subtitle = "dico = binarized, no_dico = original intensities",
+    x = "Algorithm",
+    y = "Value",
+    color = "Tipo de dato"
+  ) +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1),
+    strip.text = element_text(face = "bold")
+  )
+```
+
+   
+
+# ML W batch total peaks {data-navmenu="Complete_data"}
+
+
+
+# ML WO batch total peaks {data-navmenu="Complete_data"}
+
+
+# ML W batch total peaks {data-navmenu="WO_low_data"}
+
+
+# ML WO batch total peaks {data-navmenu="WO_low_data"}
+
+
+# ML W batch total peaks {data-navmenu="WO_low-othervirus_data"}
+
+
+# ML WO batch total peaks {data-navmenu="WO_low-othervirus_data}
+
+
+
+
